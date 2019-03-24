@@ -24,6 +24,12 @@ type Message struct {
 	Time time.Time
 }
 
+type MetaData struct {
+	Offset    int64
+	Timestamp int64
+	Headers   []Header
+}
+
 func (msg Message) item() messageSetItem {
 	item := messageSetItem{
 		Offset:  msg.Offset,
@@ -123,7 +129,8 @@ func (r *messageSetReader) readMessage(min int64,
 	}
 	switch r.version {
 	case 1:
-		return r.v1.readMessage(min, key, val)
+		meta, err := r.v1.readMessage(min, key, val)
+		return meta.Offset, meta.Timestamp, meta.Headers, err
 	case 2:
 		return r.v2.readMessage(min, key, val)
 	default:
@@ -210,7 +217,7 @@ func newMessageSetReader(reader *bufio.Reader, remain int) (*messageSetReader, e
 func (r *messageSetReaderV1) readMessage(min int64,
 	key func(*bufio.Reader, int, int) (int, error),
 	val func(*bufio.Reader, int, int) (int, error),
-) (offset int64, timestamp int64, headers []Header, err error) {
+) (meta MetaData, err error) {
 	for r.readerStack != nil {
 		if r.remain == 0 {
 			r.readerStack = r.parent
@@ -218,7 +225,7 @@ func (r *messageSetReaderV1) readMessage(min int64,
 		}
 
 		var attributes int8
-		if offset, attributes, timestamp, r.remain, err = readMessageHeader(r.reader, r.remain); err != nil {
+		if meta.Offset, attributes, meta.Timestamp, r.remain, err = readMessageHeader(r.reader, r.remain); err != nil {
 			return
 		}
 
@@ -256,14 +263,14 @@ func (r *messageSetReaderV1) readMessage(min int64,
 			// messages at offsets 10-13, then the container message will have
 			// offset 13 and the contained messages will be 0,1,2,3.  the base
 			// offset for the container, then is 13-3=10.
-			if offset, err = extractOffset(offset, decompressed); err != nil {
+			if meta.Offset, err = extractOffset(meta.Offset, decompressed); err != nil {
 				return
 			}
 
 			r.readerStack = &readerStack{
 				reader: bufio.NewReader(bytes.NewReader(decompressed)),
 				remain: len(decompressed),
-				base:   offset,
+				base:   meta.Offset,
 				parent: r.readerStack,
 			}
 			continue
@@ -271,12 +278,12 @@ func (r *messageSetReaderV1) readMessage(min int64,
 
 		// adjust the offset in case we're reading compressed messages.  the
 		// base will be zero otherwise.
-		offset += r.base
+		meta.Offset += r.base
 
 		// When the messages are compressed kafka may return messages at an
 		// earlier offset than the one that was requested, it's the client's
 		// responsibility to ignore those.
-		if offset < min {
+		if meta.Offset < min {
 			if r.remain, err = discardBytes(r.reader, r.remain); err != nil {
 				return
 			}
