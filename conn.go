@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"net"
 	"os"
@@ -740,7 +739,6 @@ func (c *Conn) ReadBatch(minBytes, maxBytes int) *Batch {
 // ReadBatchWith in every way is similar to ReadBatch. ReadBatch is configured
 // with the default values in ReadBatchConfig except for minBytes and maxBytes.
 func (c *Conn) ReadBatchWith(cfg ReadBatchConfig) *Batch {
-	log.Printf("-----------------------------Reading batch")
 
 	var adjustedDeadline time.Time
 	var maxFetch = int(c.fetchMaxBytes)

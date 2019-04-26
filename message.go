@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"log"
 	"time"
 )
 
@@ -155,7 +154,6 @@ func (r *messageSetReader) readMessage(min int64,
 	switch r.version {
 	case 1:
 		return r.v1.readMessage(min, key, val)
-		//return meta.Offset, meta.Timestamp, meta.Headers, err
 	case 2:
 		return r.v2.readMessage(min, key, val)
 	default:
@@ -532,8 +530,6 @@ func (r *messageSetReaderV2) readMessage(min int64,
 			meta.Type = Transactional
 		}
 	}
-
-	log.Printf("control type - %v", r.header.controlType())
 
 	var length int64
 	if r.remain, err = readVarInt(r.reader, r.remain, &length); err != nil {
