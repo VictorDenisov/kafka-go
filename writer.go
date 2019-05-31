@@ -27,6 +27,8 @@ type Writer struct {
 	msgs chan writerMessage
 	done chan struct{}
 
+	producerID producerID
+
 	// writer stats are all made of atomic values, no need for synchronization.
 	// Use a pointer to ensure 64-bit alignment of the values.
 	stats *writerStats
@@ -246,6 +248,10 @@ func NewWriter(config WriterConfig) *Writer {
 			waitTime:  makeSummary(),
 			retries:   makeSummary(),
 		},
+		producerID: producerID{
+			ID:    -1,
+			Epoch: -1,
+		},
 	}
 
 	w.join.Add(1)
@@ -280,9 +286,15 @@ func (w *Writer) InitTransactions() (err error) {
 		// failed to connect to the coordinator
 		return
 	}
-	if _, err := conn.initProducerID(w.config.Dialer.TransactionalID); err != nil {
-		return err
+	var producerIDResponse initProducerIDResponseV0
+	if producerIDResponse, err = conn.initProducerID(w.config.Dialer.TransactionalID); err != nil {
+		return
 	}
+	if producerIDResponse.ErrorCode != 0 {
+		return Error(producerIDResponse.ErrorCode)
+	}
+	w.producerID.ID = producerIDResponse.ProducerID
+	w.producerID.Epoch = producerIDResponse.ProducerEpoch
 	return nil
 }
 

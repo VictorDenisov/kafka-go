@@ -2,6 +2,11 @@ package kafka
 
 import "bufio"
 
+type producerID struct {
+	ID    int64
+	Epoch int16
+}
+
 type initProducerIDRequestV0 struct {
 	// The transactional id or null if the producer is not transactional
 	TransactionalId string
