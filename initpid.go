@@ -7,6 +7,11 @@ type producerID struct {
 	Epoch int16
 }
 
+var emptyProducerID producerID = producerID{
+	ID:    -1,
+	Epoch: -1,
+}
+
 type initProducerIDRequestV0 struct {
 	// The transactional id or null if the producer is not transactional
 	TransactionalId string

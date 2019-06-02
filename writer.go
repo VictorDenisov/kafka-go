@@ -248,10 +248,7 @@ func NewWriter(config WriterConfig) *Writer {
 			waitTime:  makeSummary(),
 			retries:   makeSummary(),
 		},
-		producerID: producerID{
-			ID:    -1,
-			Epoch: -1,
-		},
+		producerID: emptyProducerID,
 	}
 
 	w.join.Add(1)
