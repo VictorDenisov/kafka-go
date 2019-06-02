@@ -343,8 +343,9 @@ func (w *Writer) WriteMessages(ctx context.Context, msgs ...Message) error {
 		for _, msg := range msgs {
 			select {
 			case w.msgs <- writerMessage{
-				msg: msg,
-				res: res,
+				msg:        msg,
+				res:        res,
+				producerID: w.producerID,
 			}:
 			case <-ctx.Done():
 				w.mutex.RUnlock()
@@ -765,8 +766,9 @@ func (w *writer) write(conn *Conn, batch []Message, resch [](chan<- error)) (ret
 }
 
 type writerMessage struct {
-	msg Message
-	res chan<- error
+	msg        Message
+	res        chan<- error
+	producerID producerID
 }
 
 type writerError struct {
