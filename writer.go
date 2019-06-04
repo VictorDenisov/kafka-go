@@ -641,6 +641,7 @@ func (w *writer) run() {
 	var done bool
 	var batch = make([]Message, 0, w.batchSize)
 	var resch = make([](chan<- error), 0, w.batchSize)
+	var batchProducerID = emptyProducerID
 
 	defer func() {
 		if conn != nil {
@@ -648,17 +649,33 @@ func (w *writer) run() {
 		}
 	}()
 
+	stashedMessage := writerMessage{
+		producerID: emptyProducerID,
+	}
 	for !done {
 		var mustFlush bool
+
+		if !stashedMessage.IsEmpty() {
+			batch = append(batch, stashedMessage.msg)
+			resch = append(resch, stashedMessage.res)
+			mustFlush = len(batch) >= w.batchSize
+			stashedMessage.Reset()
+		}
 
 		select {
 		case wm, ok := <-w.msgs:
 			if !ok {
 				done, mustFlush = true, true
 			} else {
-				batch = append(batch, wm.msg)
-				resch = append(resch, wm.res)
-				mustFlush = len(batch) >= w.batchSize
+				if len(batch) == 0 || batchProducerID == wm.producerID {
+					batch = append(batch, wm.msg)
+					resch = append(resch, wm.res)
+					batchProducerID = wm.producerID
+					mustFlush = len(batch) >= w.batchSize
+				} else {
+					stashedMessage = wm
+					mustFlush = true
+				}
 			}
 			if !batchTimerRunning {
 				batchTimer.Reset(w.batchTimeout)
@@ -766,6 +783,14 @@ type writerMessage struct {
 	msg        Message
 	res        chan<- error
 	producerID producerID
+}
+
+func (e writerMessage) IsEmpty() bool {
+	return e.producerID == emptyProducerID
+}
+
+func (e *writerMessage) Reset() {
+	e.producerID = emptyProducerID
 }
 
 type writerError struct {
