@@ -404,11 +404,11 @@ func writeProduceRequestV3(w *bufio.Writer, codec CompressionCodec, correlationI
 
 	writeInt32(w, size)
 	if codec != nil {
-		err = writeRecordBatch(w, attributes, size, func(w *bufio.Writer) {
+		err = writeRecordBatch(w, attributes, size, emptyProducerID, func(w *bufio.Writer) {
 			w.Write(compressed)
 		}, msgs...)
 	} else {
-		err = writeRecordBatch(w, attributes, size, func(w *bufio.Writer) {
+		err = writeRecordBatch(w, attributes, size, emptyProducerID, func(w *bufio.Writer) {
 			for i, msg := range msgs {
 				writeRecord(w, 0, msgs[0].Time, int64(i), msg)
 			}
@@ -478,11 +478,11 @@ func writeProduceRequestV7(w *bufio.Writer, codec CompressionCodec, correlationI
 
 	writeInt32(w, size)
 	if codec != nil {
-		err = writeRecordBatch(w, attributes, size, func(w *bufio.Writer) {
+		err = writeRecordBatch(w, attributes, size, emptyProducerID, func(w *bufio.Writer) {
 			w.Write(compressed)
 		}, msgs...)
 	} else {
-		err = writeRecordBatch(w, attributes, size, func(w *bufio.Writer) {
+		err = writeRecordBatch(w, attributes, size, emptyProducerID, func(w *bufio.Writer) {
 			for i, msg := range msgs {
 				writeRecord(w, 0, msgs[0].Time, int64(i), msg)
 			}
@@ -539,7 +539,7 @@ func recordBatchSize(msgs ...Message) (size int32) {
 	return
 }
 
-func writeRecordBatch(w *bufio.Writer, attributes int16, size int32, write func(*bufio.Writer), msgs ...Message) error {
+func writeRecordBatch(w *bufio.Writer, attributes int16, size int32, producerID producerID, write func(*bufio.Writer), msgs ...Message) error {
 
 	baseTime := msgs[0].Time
 	lastTime := msgs[len(msgs)-1].Time
@@ -559,8 +559,8 @@ func writeRecordBatch(w *bufio.Writer, attributes int16, size int32, write func(
 	writeInt32(crcWriter, int32(len(msgs)-1)) // max offset
 	writeInt64(crcWriter, timestamp(baseTime))
 	writeInt64(crcWriter, timestamp(lastTime))
-	writeInt64(crcWriter, -1)               // default producer id for now
-	writeInt16(crcWriter, -1)               // default producer epoch for now
+	writeInt64(crcWriter, producerID.ID)    // default producer id for now
+	writeInt16(crcWriter, producerID.Epoch) // default producer epoch for now
 	writeInt32(crcWriter, -1)               // default base sequence
 	writeInt32(crcWriter, int32(len(msgs))) // record count
 
