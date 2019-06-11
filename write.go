@@ -347,7 +347,7 @@ func writeProduceRequestV2(w *bufio.Writer, codec CompressionCodec, correlationI
 	return w.Flush()
 }
 
-func writeProduceRequestV3(w *bufio.Writer, codec CompressionCodec, correlationID int32, clientID, topic string, partition int32, timeout time.Duration, requiredAcks int16, transactionalID *string, msgs ...Message) (err error) {
+func writeProduceRequestV3(w *bufio.Writer, codec CompressionCodec, correlationID int32, clientID, topic string, partition int32, timeout time.Duration, requiredAcks int16, transactionalID *string, producerID producerID, msgs ...Message) (err error) {
 	var size int32
 	var compressed []byte
 	var attributes int16
@@ -404,11 +404,11 @@ func writeProduceRequestV3(w *bufio.Writer, codec CompressionCodec, correlationI
 
 	writeInt32(w, size)
 	if codec != nil {
-		err = writeRecordBatch(w, attributes, size, emptyProducerID, func(w *bufio.Writer) {
+		err = writeRecordBatch(w, attributes, size, producerID, func(w *bufio.Writer) {
 			w.Write(compressed)
 		}, msgs...)
 	} else {
-		err = writeRecordBatch(w, attributes, size, emptyProducerID, func(w *bufio.Writer) {
+		err = writeRecordBatch(w, attributes, size, producerID, func(w *bufio.Writer) {
 			for i, msg := range msgs {
 				writeRecord(w, 0, msgs[0].Time, int64(i), msg)
 			}
@@ -421,7 +421,7 @@ func writeProduceRequestV3(w *bufio.Writer, codec CompressionCodec, correlationI
 	return w.Flush()
 }
 
-func writeProduceRequestV7(w *bufio.Writer, codec CompressionCodec, correlationID int32, clientID, topic string, partition int32, timeout time.Duration, requiredAcks int16, transactionalID *string, msgs ...Message) (err error) {
+func writeProduceRequestV7(w *bufio.Writer, codec CompressionCodec, correlationID int32, clientID, topic string, partition int32, timeout time.Duration, requiredAcks int16, transactionalID *string, producerID producerID, msgs ...Message) (err error) {
 
 	var size int32
 	var compressed []byte
@@ -478,11 +478,11 @@ func writeProduceRequestV7(w *bufio.Writer, codec CompressionCodec, correlationI
 
 	writeInt32(w, size)
 	if codec != nil {
-		err = writeRecordBatch(w, attributes, size, emptyProducerID, func(w *bufio.Writer) {
+		err = writeRecordBatch(w, attributes, size, producerID, func(w *bufio.Writer) {
 			w.Write(compressed)
 		}, msgs...)
 	} else {
-		err = writeRecordBatch(w, attributes, size, emptyProducerID, func(w *bufio.Writer) {
+		err = writeRecordBatch(w, attributes, size, producerID, func(w *bufio.Writer) {
 			for i, msg := range msgs {
 				writeRecord(w, 0, msgs[0].Time, int64(i), msg)
 			}
