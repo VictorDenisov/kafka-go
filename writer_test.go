@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 	"strings"
 	"testing"
 	"time"
@@ -224,4 +225,27 @@ func TestInitTransactions(t *testing.T) {
 	if err != nil {
 		t.Errorf("%v", err)
 	}
+}
+
+func TestTransactionalWrite(t *testing.T) {
+	topic := CreateTopic(t, 1)
+	log.Printf("Writing to topic: %v", topic)
+	DefaultDialer.TransactionalID = "myTransaction"
+
+	w := NewWriter(WriterConfig{
+		Brokers:      []string{"localhost:9092"},
+		Topic:        topic,
+		BatchTimeout: 100 * time.Millisecond,
+		BatchSize:    5,
+	})
+	err := w.InitTransactions()
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	message := Message{
+		Topic: topic,
+		Key:   []byte("key"),
+		Value: []byte("value"),
+	}
+	w.WriteMessages(context.Background(), message)
 }

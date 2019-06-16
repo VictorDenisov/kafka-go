@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"reflect"
 )
 
@@ -540,6 +541,8 @@ func readFetchResponseHeaderV10(r *bufio.Reader, size int) (throttle int32, wate
 			}
 		}
 	}
+
+	log.Printf("Aborted transactions: %v", abortedTransactions)
 
 	if p.ErrorCode != 0 {
 		err = Error(p.ErrorCode)
