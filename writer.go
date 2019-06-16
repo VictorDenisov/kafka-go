@@ -700,7 +700,7 @@ func (w *writer) run() {
 			}
 
 			var err error
-			if conn, err = w.write(conn, batch, resch); err != nil {
+			if conn, err = w.write(conn, batchProducerID, batch, resch); err != nil {
 				if conn != nil {
 					conn.Close()
 					conn = nil
@@ -735,7 +735,7 @@ func (w *writer) dial() (conn *Conn, err error) {
 	return
 }
 
-func (w *writer) write(conn *Conn, batch []Message, resch [](chan<- error)) (ret *Conn, err error) {
+func (w *writer) write(conn *Conn, producerID producerID, batch []Message, resch [](chan<- error)) (ret *Conn, err error) {
 	w.stats.writes.observe(1)
 	if conn == nil {
 		if conn, err = w.dial(); err != nil {
@@ -753,7 +753,7 @@ func (w *writer) write(conn *Conn, batch []Message, resch [](chan<- error)) (ret
 	t0 := time.Now()
 	conn.SetWriteDeadline(time.Now().Add(w.writeTimeout))
 
-	if _, _, _, _, err = conn.writeCompressedMessages(w.codec, emptyProducerID, batch...); err != nil {
+	if _, _, _, _, err = conn.writeCompressedMessages(w.codec, producerID, batch...); err != nil {
 		w.stats.errors.observe(1)
 		w.withErrorLogger(func(logger *log.Logger) {
 			logger.Printf("error writing messages to %s (partition %d): %s", w.topic, w.partition, err)
