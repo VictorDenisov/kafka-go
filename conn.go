@@ -1026,7 +1026,7 @@ func (c *Conn) WriteMessages(msgs ...Message) (int, error) {
 //
 // If the compression codec is not nil, the messages will be compressed.
 func (c *Conn) WriteCompressedMessages(codec CompressionCodec, msgs ...Message) (nbytes int, err error) {
-	nbytes, _, _, _, err = c.writeCompressedMessages(codec, msgs...)
+	nbytes, _, _, _, err = c.writeCompressedMessages(codec, emptyProducerID, msgs...)
 	return
 }
 
@@ -1037,10 +1037,10 @@ func (c *Conn) WriteCompressedMessages(codec CompressionCodec, msgs ...Message) 
 //
 // If the compression codec is not nil, the messages will be compressed.
 func (c *Conn) WriteCompressedMessagesAt(codec CompressionCodec, msgs ...Message) (nbytes int, partition int32, offset int64, appendTime time.Time, err error) {
-	return c.writeCompressedMessages(codec, msgs...)
+	return c.writeCompressedMessages(codec, emptyProducerID, msgs...)
 }
 
-func (c *Conn) writeCompressedMessages(codec CompressionCodec, msgs ...Message) (nbytes int, partition int32, offset int64, appendTime time.Time, err error) {
+func (c *Conn) writeCompressedMessages(codec CompressionCodec, producerID producerID, msgs ...Message) (nbytes int, partition int32, offset int64, appendTime time.Time, err error) {
 
 	if len(msgs) == 0 {
 		return
