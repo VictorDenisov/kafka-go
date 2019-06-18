@@ -227,9 +227,8 @@ func TestInitTransactions(t *testing.T) {
 	}
 }
 
-func TestTransactionalWrite(t *testing.T) {
+func TestDanglingTransactionalWrite(t *testing.T) {
 	topic := CreateTopic(t, 1)
-	log.Printf("Writing to topic: %v", topic)
 	DefaultDialer.TransactionalID = "myTransaction"
 
 	w := NewWriter(WriterConfig{
@@ -238,6 +237,8 @@ func TestTransactionalWrite(t *testing.T) {
 		BatchTimeout: 100 * time.Millisecond,
 		BatchSize:    5,
 	})
+	defer w.Close()
+
 	err := w.InitTransactions()
 	if err != nil {
 		t.Errorf("%v", err)
@@ -248,4 +249,17 @@ func TestTransactionalWrite(t *testing.T) {
 		Value: []byte("value"),
 	}
 	w.WriteMessages(context.Background(), message)
+
+	r := NewReader(ReaderConfig{
+		Brokers:   []string{"localhost:9092"},
+		Topic:     topic,
+		Partition: 0,
+	})
+	defer r.Close()
+
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+	_, err = r.ReadMessage(ctx)
+	if err != context.DeadlineExceeded {
+		t.Errorf("Failed waiting for the message: %v", err)
+	}
 }
