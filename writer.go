@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -31,7 +32,8 @@ type Writer struct {
 
 	// writer stats are all made of atomic values, no need for synchronization.
 	// Use a pointer to ensure 64-bit alignment of the values.
-	stats *writerStats
+	stats         *writerStats
+	inTransaction int32
 }
 
 // WriterConfig is a configuration type used to create new instances of Writer.
@@ -292,6 +294,17 @@ func (w *Writer) InitTransactions() (err error) {
 	}
 	w.producerID.ID = producerIDResponse.ProducerID
 	w.producerID.Epoch = producerIDResponse.ProducerEpoch
+	return nil
+}
+
+func (w *Writer) BeginTransaction() (err error) {
+	if len(w.config.Dialer.TransactionalID) == 0 {
+		return errors.New("Can't begin transaction in a non transactional writer.")
+	}
+	if !atomic.CompareAndSwapInt32(&w.inTransaction, 0, 1) {
+		return errors.New("This writer already has a running transaction.")
+	}
+
 	return nil
 }
 
