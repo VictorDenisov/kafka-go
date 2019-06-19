@@ -308,6 +308,14 @@ func (w *Writer) BeginTransaction() (err error) {
 	return nil
 }
 
+func (w *Writer) CommitTransaction() (err error) {
+	inTransaction := atomic.LoadInt32(&w.inTransaction)
+	if inTransaction != 1 {
+		return errors.New("The transaction is not started. Nothing to commit.")
+	}
+	return nil
+}
+
 // WriteMessages writes a batch of messages to the kafka topic configured on this
 // writer.
 //
