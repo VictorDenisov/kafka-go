@@ -27,6 +27,7 @@ const (
 	createTopicsRequest     apiKey = 19
 	deleteTopicsRequest     apiKey = 20
 	initProducerIDRequest   apiKey = 22
+	endTxnRequest           apiKey = 26
 	saslAuthenticateRequest apiKey = 36
 )
 

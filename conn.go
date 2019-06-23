@@ -371,6 +371,38 @@ func (c *Conn) initProducerID(transactionalID string) (initProducerIDResponseV0,
 	return response, err
 }
 
+func (c *Conn) commitTransaction(transactionalID string, producerID producerID) {
+}
+
+func (c *Conn) abortTransaction(transactionalID string, producerID producerID) {
+}
+
+func (c *Conn) endTransaction(
+	transactionalID string,
+	producerID producerID,
+	result int8,
+) (err error) {
+	request := endTransactionRequestV0{
+		TransactionalID:   transactionalID,
+		ProducerID:        producerID.ID,
+		ProducerEpoch:     producerID.Epoch,
+		TransactionResult: result,
+	}
+	var response endTransactionResponseV0
+
+	err = c.readOperation(
+		func(deadline time.Time, id int32) error {
+			return c.writeRequest(endTxnRequest, v0, id, request)
+		},
+		func(deadline time.Time, size int) error {
+			return expectZeroSize(func() (remain int, err error) {
+				return (&response).readFrom(&c.rbuf, size)
+			}())
+		},
+	)
+	return err
+}
+
 // heartbeat sends a heartbeat message required by consumer groups
 //
 // See http://kafka.apache.org/protocol.html#The_Messages_Heartbeat
