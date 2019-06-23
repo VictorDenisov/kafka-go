@@ -258,9 +258,8 @@ func NewWriter(config WriterConfig) *Writer {
 	return w
 }
 
-func (w *Writer) InitTransactions() (err error) {
+func (w *Writer) getConnectionToCoordinator() (conn *Conn, err error) {
 	var coordinator findCoordinatorResponseCoordinatorV0
-	var conn *Conn
 	if len(w.config.Dialer.TransactionalID) != 0 {
 		for _, broker := range shuffledStrings(w.config.Brokers) {
 			if conn, err = w.config.Dialer.Dial("tcp", broker); err != nil {
@@ -278,13 +277,23 @@ func (w *Writer) InitTransactions() (err error) {
 	}
 
 	if err != nil {
-		return
+		return nil, err
 	}
 	addr := fmt.Sprintf("%v:%v", coordinator.Host, coordinator.Port)
 	if conn, err = w.config.Dialer.Dial("tcp", addr); err != nil {
 		// failed to connect to the coordinator
+		return nil, err
+	}
+
+	return conn, nil
+}
+
+func (w *Writer) InitTransactions() (err error) {
+	var conn *Conn
+	if conn, err = w.getConnectionToCoordinator(); err != nil {
 		return
 	}
+
 	var producerIDResponse initProducerIDResponseV0
 	if producerIDResponse, err = conn.initProducerID(w.config.Dialer.TransactionalID); err != nil {
 		return

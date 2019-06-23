@@ -371,17 +371,19 @@ func (c *Conn) initProducerID(transactionalID string) (initProducerIDResponseV0,
 	return response, err
 }
 
-func (c *Conn) commitTransaction(transactionalID string, producerID producerID) {
+func (c *Conn) commitTransaction(transactionalID string, producerID producerID) error {
+	return c.endTransaction(transactionalID, producerID, 1)
 }
 
-func (c *Conn) abortTransaction(transactionalID string, producerID producerID) {
+func (c *Conn) abortTransaction(transactionalID string, producerID producerID) error {
+	return c.endTransaction(transactionalID, producerID, 0)
 }
 
 func (c *Conn) endTransaction(
 	transactionalID string,
 	producerID producerID,
 	result int8,
-) (err error) {
+) error {
 	request := endTransactionRequestV0{
 		TransactionalID:   transactionalID,
 		ProducerID:        producerID.ID,
@@ -390,7 +392,7 @@ func (c *Conn) endTransaction(
 	}
 	var response endTransactionResponseV0
 
-	err = c.readOperation(
+	err := c.readOperation(
 		func(deadline time.Time, id int32) error {
 			return c.writeRequest(endTxnRequest, v0, id, request)
 		},
