@@ -322,7 +322,11 @@ func (w *Writer) CommitTransaction() (err error) {
 	if inTransaction != 1 {
 		return errors.New("The transaction is not started. Nothing to commit.")
 	}
-	return nil
+	var conn *Conn
+	if conn, err = w.getConnectionToCoordinator(); err != nil {
+		return
+	}
+	return conn.commitTransaction(w.config.Dialer.TransactionalID, w.producerID)
 }
 
 // WriteMessages writes a batch of messages to the kafka topic configured on this

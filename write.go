@@ -371,6 +371,9 @@ func writeProduceRequestV3(w *bufio.Writer, codec CompressionCodec, correlationI
 	} else {
 		size = recordBatchSize(msgs...)
 	}
+	if producerID != emptyProducerID {
+		attributes |= 1 << 4
+	}
 
 	h := requestHeader{
 		ApiKey:        int16(produceRequest),
@@ -444,6 +447,9 @@ func writeProduceRequestV7(w *bufio.Writer, codec CompressionCodec, correlationI
 		size = recordBatchHeaderSize() + int32(len(compressed))
 	} else {
 		size = recordBatchSize(msgs...)
+	}
+	if producerID != emptyProducerID {
+		attributes |= 1 << 4
 	}
 
 	h := requestHeader{
@@ -561,7 +567,7 @@ func writeRecordBatch(w *bufio.Writer, attributes int16, size int32, producerID 
 	writeInt64(crcWriter, timestamp(lastTime))
 	writeInt64(crcWriter, producerID.ID)    // default producer id for now
 	writeInt16(crcWriter, producerID.Epoch) // default producer epoch for now
-	writeInt32(crcWriter, -1)               // default base sequence
+	writeInt32(crcWriter, 0)                // default base sequence
 	writeInt32(crcWriter, int32(len(msgs))) // record count
 
 	write(crcWriter)

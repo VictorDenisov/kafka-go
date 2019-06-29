@@ -233,21 +233,27 @@ func TestDanglingTransactionalWrite(t *testing.T) {
 	w := NewWriter(WriterConfig{
 		Brokers:      []string{"localhost:9092"},
 		Topic:        topic,
-		BatchTimeout: 100 * time.Millisecond,
+		BatchTimeout: 1000 * time.Millisecond,
 		BatchSize:    5,
 	})
 	defer w.Close()
 
 	err := w.InitTransactions()
 	if err != nil {
-		t.Errorf("%v", err)
+		t.Fatalf("%v", err)
+	}
+	if err = w.BeginTransaction(); err != nil {
+		t.Fatalf("%v", err)
 	}
 	message := Message{
 		Topic: topic,
 		Key:   []byte("key"),
 		Value: []byte("value"),
 	}
-	w.WriteMessages(context.Background(), message)
+	err = w.WriteMessages(context.Background(), message)
+	if err != nil {
+		t.Fatalf("Error writing a message: %v", err)
+	}
 
 	r := NewReader(ReaderConfig{
 		Brokers:   []string{"localhost:9092"},
@@ -256,8 +262,13 @@ func TestDanglingTransactionalWrite(t *testing.T) {
 	})
 	defer r.Close()
 
+	err = w.CommitTransaction()
+	if err != nil {
+		t.Fatalf("Failed to commit transaction: %v", err)
+	}
+
 	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
-	_, err = r.ReadMessage(ctx)
+	m, err := r.ReadMessage(ctx)
 	if err != context.DeadlineExceeded {
 		t.Errorf("Failed waiting for the message: %v", err)
 	}
