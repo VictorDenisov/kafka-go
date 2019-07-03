@@ -210,6 +210,7 @@ func readPartition(topic string, partition int, offset int64) (msgs []Message, e
 	}
 }
 
+/*
 func TestInitTransactions(t *testing.T) {
 	topic := CreateTopic(t, 1)
 
@@ -225,6 +226,7 @@ func TestInitTransactions(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 }
+*/
 
 func TestDanglingTransactionalWrite(t *testing.T) {
 	topic := CreateTopic(t, 1)
@@ -268,7 +270,7 @@ func TestDanglingTransactionalWrite(t *testing.T) {
 	}
 
 	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
-	m, err := r.ReadMessage(ctx)
+	_, err = r.ReadMessage(ctx)
 	if err != context.DeadlineExceeded {
 		t.Errorf("Failed waiting for the message: %v", err)
 	}
