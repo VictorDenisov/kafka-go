@@ -49,6 +49,9 @@ func (t *transactionManager) initTransactions() (err error) {
 }
 
 func (t *transactionManager) getProducerID() producerID {
+	if t == nil {
+		return emptyProducerID
+	}
 	return t.producerID
 }
 

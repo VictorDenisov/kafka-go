@@ -9,7 +9,6 @@ import (
 	"math/rand"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -28,12 +27,11 @@ type Writer struct {
 	msgs chan writerMessage
 	done chan struct{}
 
-	producerID producerID
-
 	// writer stats are all made of atomic values, no need for synchronization.
 	// Use a pointer to ensure 64-bit alignment of the values.
-	stats         *writerStats
-	inTransaction int32
+	stats *writerStats
+
+	transactionManager *transactionManager
 }
 
 // WriterConfig is a configuration type used to create new instances of Writer.
@@ -250,7 +248,6 @@ func NewWriter(config WriterConfig) *Writer {
 			waitTime:  makeSummary(),
 			retries:   makeSummary(),
 		},
-		producerID: emptyProducerID,
 	}
 
 	w.join.Add(1)
@@ -289,44 +286,21 @@ func (w *Writer) getConnectionToCoordinator() (conn *Conn, err error) {
 }
 
 func (w *Writer) InitTransactions() (err error) {
-	var conn *Conn
-	if conn, err = w.getConnectionToCoordinator(); err != nil {
-		return
-	}
-
-	var producerIDResponse initProducerIDResponseV0
-	if producerIDResponse, err = conn.initProducerID(w.config.Dialer.TransactionalID); err != nil {
-		return
-	}
-	if producerIDResponse.ErrorCode != 0 {
-		return Error(producerIDResponse.ErrorCode)
-	}
-	w.producerID.ID = producerIDResponse.ProducerID
-	w.producerID.Epoch = producerIDResponse.ProducerEpoch
-	return nil
+	w.transactionManager = newTransactionManager(transactionManagerConfig{
+		w.config.Dialer.TransactionalID,
+		w.config.Brokers,
+		w.config.Dialer,
+		w.config.ReadTimeout,
+	})
+	return w.transactionManager.initTransactions()
 }
 
 func (w *Writer) BeginTransaction() (err error) {
-	if len(w.config.Dialer.TransactionalID) == 0 {
-		return errors.New("Can't begin transaction in a non transactional writer.")
-	}
-	if !atomic.CompareAndSwapInt32(&w.inTransaction, 0, 1) {
-		return errors.New("This writer already has a running transaction.")
-	}
-
-	return nil
+	return w.transactionManager.beginTransaction()
 }
 
 func (w *Writer) CommitTransaction() (err error) {
-	inTransaction := atomic.LoadInt32(&w.inTransaction)
-	if inTransaction != 1 {
-		return errors.New("The transaction is not started. Nothing to commit.")
-	}
-	var conn *Conn
-	if conn, err = w.getConnectionToCoordinator(); err != nil {
-		return
-	}
-	return conn.commitTransaction(w.config.Dialer.TransactionalID, w.producerID)
+	return w.transactionManager.commitTransaction()
 }
 
 // WriteMessages writes a batch of messages to the kafka topic configured on this
@@ -376,7 +350,7 @@ func (w *Writer) WriteMessages(ctx context.Context, msgs ...Message) error {
 			case w.msgs <- writerMessage{
 				msg:        msg,
 				res:        res,
-				producerID: w.producerID,
+				producerID: w.transactionManager.getProducerID(),
 			}:
 			case <-ctx.Done():
 				w.mutex.RUnlock()
