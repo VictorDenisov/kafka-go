@@ -210,8 +210,7 @@ func readPartition(topic string, partition int, offset int64) (msgs []Message, e
 	}
 }
 
-/*
-func TestInitTransactions(t *testing.T) {
+func TestWriterInitTransactions(t *testing.T) {
 	topic := CreateTopic(t, 1)
 
 	DefaultDialer.TransactionalID = "myTransaction"
@@ -226,7 +225,6 @@ func TestInitTransactions(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 }
-*/
 
 func TestDanglingTransactionalWrite(t *testing.T) {
 	topic := CreateTopic(t, 1)

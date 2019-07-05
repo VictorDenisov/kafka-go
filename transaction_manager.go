@@ -58,6 +58,18 @@ func (t *transactionManager) beginTransaction() (err error) {
 	return nil
 }
 
+func (t *transactionManager) commitTransaction() (err error) {
+	inTransaction := atomic.LoadInt32(&t.inTransaction)
+	if inTransaction != 1 {
+		return errors.New("The transaction is not started. Nothing to commit.")
+	}
+	var conn *Conn
+	if conn, err = t.getConnectionToCoordinator(); err != nil {
+		return
+	}
+	return conn.commitTransaction(t.config.transactionalID, t.producerID)
+}
+
 func (t *transactionManager) getConnectionToCoordinator() (conn *Conn, err error) {
 	var coordinator findCoordinatorResponseCoordinatorV0
 	if len(t.config.transactionalID) != 0 {
