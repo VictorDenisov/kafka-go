@@ -255,36 +255,6 @@ func NewWriter(config WriterConfig) *Writer {
 	return w
 }
 
-func (w *Writer) getConnectionToCoordinator() (conn *Conn, err error) {
-	var coordinator findCoordinatorResponseCoordinatorV0
-	if len(w.config.Dialer.TransactionalID) != 0 {
-		for _, broker := range shuffledStrings(w.config.Brokers) {
-			if conn, err = w.config.Dialer.Dial("tcp", broker); err != nil {
-				continue
-			}
-
-			conn.SetReadDeadline(time.Now().Add(w.config.ReadTimeout))
-			coordinator, err = conn.findTransactionCoordinator(w.config.Dialer.TransactionalID)
-			conn.Close()
-
-			if err == nil {
-				break
-			}
-		}
-	}
-
-	if err != nil {
-		return nil, err
-	}
-	addr := fmt.Sprintf("%v:%v", coordinator.Host, coordinator.Port)
-	if conn, err = w.config.Dialer.Dial("tcp", addr); err != nil {
-		// failed to connect to the coordinator
-		return nil, err
-	}
-
-	return conn, nil
-}
-
 func (w *Writer) InitTransactions() (err error) {
 	w.transactionManager = newTransactionManager(transactionManagerConfig{
 		w.config.Dialer.TransactionalID,
