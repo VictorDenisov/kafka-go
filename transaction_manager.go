@@ -31,12 +31,13 @@ func newTransactionManager(config transactionManagerConfig) *transactionManager 
 }
 
 func (t *transactionManager) initTransactions() (err error) {
-	if t.conn, err = t.getConnectionToCoordinator(); err != nil {
+	var conn *Conn
+	if conn, err = t.getConnectionToCoordinator(); err != nil {
 		return
 	}
 
 	var producerIDResponse initProducerIDResponseV0
-	if producerIDResponse, err = t.conn.initProducerID(t.config.transactionalID); err != nil {
+	if producerIDResponse, err = conn.initProducerID(t.config.transactionalID); err != nil {
 		return
 	}
 	if producerIDResponse.ErrorCode != 0 {
@@ -71,6 +72,9 @@ func (t *transactionManager) commitTransaction() (err error) {
 }
 
 func (t *transactionManager) getConnectionToCoordinator() (conn *Conn, err error) {
+	if t.conn != nil {
+		return t.conn, nil
+	}
 	var coordinator findCoordinatorResponseCoordinatorV0
 	if len(t.config.transactionalID) != 0 {
 		for _, broker := range shuffledStrings(t.config.brokers) {
@@ -97,5 +101,6 @@ func (t *transactionManager) getConnectionToCoordinator() (conn *Conn, err error
 		return nil, err
 	}
 
+	t.conn = conn
 	return conn, nil
 }
