@@ -1,14 +1,17 @@
 package kafka
 
 import (
+	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 )
 
 type transactionManager struct {
-	producerID producerID
-	conn       *Conn
-	config     transactionManagerConfig
+	producerID    producerID
+	conn          *Conn
+	config        transactionManagerConfig
+	inTransaction int32
 }
 
 type transactionManagerConfig struct {
@@ -23,6 +26,7 @@ func newTransactionManager(config transactionManagerConfig) *transactionManager 
 		emptyProducerID,
 		nil,
 		config,
+		0,
 	}
 }
 
@@ -40,6 +44,17 @@ func (t *transactionManager) initTransactions() (err error) {
 	}
 	t.producerID.ID = producerIDResponse.ProducerID
 	t.producerID.Epoch = producerIDResponse.ProducerEpoch
+	return nil
+}
+
+func (t *transactionManager) beginTransaction() (err error) {
+	if len(t.config.transactionalID) == 0 {
+		return errors.New("Can't begin transaction in a non transactional writer.")
+	}
+	if !atomic.CompareAndSwapInt32(&t.inTransaction, 0, 1) {
+		return errors.New("This writer already has a running transaction.")
+	}
+
 	return nil
 }
 
