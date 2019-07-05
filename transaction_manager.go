@@ -48,6 +48,10 @@ func (t *transactionManager) initTransactions() (err error) {
 	return nil
 }
 
+func (t *transactionManager) getProducerID() producerID {
+	return t.producerID
+}
+
 func (t *transactionManager) beginTransaction() (err error) {
 	if len(t.config.transactionalID) == 0 {
 		return errors.New("Can't begin transaction in a non transactional writer.")
