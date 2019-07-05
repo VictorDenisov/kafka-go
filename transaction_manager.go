@@ -78,6 +78,18 @@ func (t *transactionManager) commitTransaction() (err error) {
 	return conn.commitTransaction(t.config.transactionalID, t.producerID)
 }
 
+func (t *transactionManager) abortTransaction() (err error) {
+	inTransaction := atomic.LoadInt32(&t.inTransaction)
+	if inTransaction != 1 {
+		return errors.New("The transaction is not started. Nothing to commit.")
+	}
+	var conn *Conn
+	if conn, err = t.getConnectionToCoordinator(); err != nil {
+		return
+	}
+	return conn.abortTransaction(t.config.transactionalID, t.producerID)
+}
+
 func (t *transactionManager) getConnectionToCoordinator() (conn *Conn, err error) {
 	if t.conn != nil {
 		return t.conn, nil

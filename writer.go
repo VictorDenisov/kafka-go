@@ -273,6 +273,10 @@ func (w *Writer) CommitTransaction() (err error) {
 	return w.transactionManager.commitTransaction()
 }
 
+func (w *Writer) AbortTransaction() (err error) {
+	return w.transactionManager.abortTransaction()
+}
+
 // WriteMessages writes a batch of messages to the kafka topic configured on this
 // writer.
 //
