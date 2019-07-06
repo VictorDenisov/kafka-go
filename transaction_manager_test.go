@@ -6,11 +6,11 @@ import (
 )
 
 func TestInitTransactions(t *testing.T) {
-	tm := newTransactionManager(transactionManagerConfig{
-		transactionalID: "myTransaction",
-		brokers:         []string{"localhost:9092"},
-		dialer:          DefaultDialer,
-		readTimeout:     10 * time.Second,
+	tm := NewTransactionManager(TransactionManagerConfig{
+		TransactionalID: "myTransaction",
+		Brokers:         []string{"localhost:9092"},
+		Dialer:          DefaultDialer,
+		ReadTimeout:     10 * time.Second,
 	})
 	err := tm.initTransactions()
 
@@ -20,11 +20,11 @@ func TestInitTransactions(t *testing.T) {
 }
 
 func TestBeginTransaction(t *testing.T) {
-	tm := newTransactionManager(transactionManagerConfig{
-		transactionalID: "myTransaction",
-		brokers:         []string{"localhost:9092"},
-		dialer:          DefaultDialer,
-		readTimeout:     10 * time.Second,
+	tm := NewTransactionManager(TransactionManagerConfig{
+		TransactionalID: "myTransaction",
+		Brokers:         []string{"localhost:9092"},
+		Dialer:          DefaultDialer,
+		ReadTimeout:     10 * time.Second,
 	})
 	err := tm.beginTransaction()
 	if err != nil {
@@ -37,11 +37,11 @@ func TestBeginTransaction(t *testing.T) {
 }
 
 func TestCommitTransaction(t *testing.T) {
-	tm := newTransactionManager(transactionManagerConfig{
-		transactionalID: "myTransaction",
-		brokers:         []string{"localhost:9092"},
-		dialer:          DefaultDialer,
-		readTimeout:     10 * time.Second,
+	tm := NewTransactionManager(TransactionManagerConfig{
+		TransactionalID: "myTransaction",
+		Brokers:         []string{"localhost:9092"},
+		Dialer:          DefaultDialer,
+		ReadTimeout:     10 * time.Second,
 	})
 	err := tm.initTransactions()
 
@@ -59,11 +59,11 @@ func TestCommitTransaction(t *testing.T) {
 }
 
 func TestAbortTransaction(t *testing.T) {
-	tm := newTransactionManager(transactionManagerConfig{
-		transactionalID: "myTransaction",
-		brokers:         []string{"localhost:9092"},
-		dialer:          DefaultDialer,
-		readTimeout:     10 * time.Second,
+	tm := NewTransactionManager(TransactionManagerConfig{
+		TransactionalID: "myTransaction",
+		Brokers:         []string{"localhost:9092"},
+		Dialer:          DefaultDialer,
+		ReadTimeout:     10 * time.Second,
 	})
 	err := tm.initTransactions()
 

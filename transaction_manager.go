@@ -15,13 +15,19 @@ type TransactionManager struct {
 }
 
 type TransactionManagerConfig struct {
-	transactionalID string
-	brokers         []string
-	dialer          *Dialer
-	readTimeout     time.Duration
+	TransactionalID string
+	Brokers         []string
+	Dialer          *Dialer
+	ReadTimeout     time.Duration
 }
 
 func NewTransactionManager(config TransactionManagerConfig) *TransactionManager {
+	if config.Dialer == nil {
+		config.Dialer = DefaultDialer
+	}
+	if config.ReadTimeout == 0 {
+		config.ReadTimeout = 10 * time.Second
+	}
 	return &TransactionManager{
 		emptyProducerID,
 		nil,
@@ -37,7 +43,7 @@ func (t *TransactionManager) initTransactions() (err error) {
 	}
 
 	var producerIDResponse initProducerIDResponseV0
-	if producerIDResponse, err = conn.initProducerID(t.config.transactionalID); err != nil {
+	if producerIDResponse, err = conn.initProducerID(t.config.TransactionalID); err != nil {
 		return
 	}
 	if producerIDResponse.ErrorCode != 0 {
@@ -56,7 +62,7 @@ func (t *TransactionManager) getProducerID() producerID {
 }
 
 func (t *TransactionManager) beginTransaction() (err error) {
-	if len(t.config.transactionalID) == 0 {
+	if len(t.config.TransactionalID) == 0 {
 		return errors.New("Can't begin transaction in a non transactional writer.")
 	}
 	if !atomic.CompareAndSwapInt32(&t.inTransaction, 0, 1) {
@@ -75,7 +81,7 @@ func (t *TransactionManager) commitTransaction() (err error) {
 	if conn, err = t.getConnectionToCoordinator(); err != nil {
 		return
 	}
-	return conn.commitTransaction(t.config.transactionalID, t.producerID)
+	return conn.commitTransaction(t.config.TransactionalID, t.producerID)
 }
 
 func (t *TransactionManager) abortTransaction() (err error) {
@@ -87,7 +93,7 @@ func (t *TransactionManager) abortTransaction() (err error) {
 	if conn, err = t.getConnectionToCoordinator(); err != nil {
 		return
 	}
-	return conn.abortTransaction(t.config.transactionalID, t.producerID)
+	return conn.abortTransaction(t.config.TransactionalID, t.producerID)
 }
 
 func (t *TransactionManager) getConnectionToCoordinator() (conn *Conn, err error) {
@@ -95,14 +101,14 @@ func (t *TransactionManager) getConnectionToCoordinator() (conn *Conn, err error
 		return t.conn, nil
 	}
 	var coordinator findCoordinatorResponseCoordinatorV0
-	if len(t.config.transactionalID) != 0 {
-		for _, broker := range shuffledStrings(t.config.brokers) {
-			if conn, err = t.config.dialer.Dial("tcp", broker); err != nil {
+	if len(t.config.TransactionalID) != 0 {
+		for _, broker := range shuffledStrings(t.config.Brokers) {
+			if conn, err = t.config.Dialer.Dial("tcp", broker); err != nil {
 				continue
 			}
 
-			conn.SetReadDeadline(time.Now().Add(t.config.readTimeout))
-			coordinator, err = conn.findTransactionCoordinator(t.config.transactionalID)
+			conn.SetReadDeadline(time.Now().Add(t.config.ReadTimeout))
+			coordinator, err = conn.findTransactionCoordinator(t.config.TransactionalID)
 			conn.Close()
 
 			if err == nil {
@@ -115,7 +121,7 @@ func (t *TransactionManager) getConnectionToCoordinator() (conn *Conn, err error
 		return nil, err
 	}
 	addr := fmt.Sprintf("%v:%v", coordinator.Host, coordinator.Port)
-	if conn, err = t.config.dialer.Dial("tcp", addr); err != nil {
+	if conn, err = t.config.Dialer.Dial("tcp", addr); err != nil {
 		// failed to connect to the coordinator
 		return nil, err
 	}

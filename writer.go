@@ -122,6 +122,11 @@ type WriterConfig struct {
 	// back to using Logger instead.
 	ErrorLogger *log.Logger
 
+	// If transaction manager is nil then the writer will be
+	// non-transactional and non-idempotent. TransactionManager without
+	// transactionalID will enable only idempotent delivery on the writer.
+	TransactionManager *TransactionManager
+
 	newPartitionWriter func(partition int, config WriterConfig, stats *writerStats) partitionWriter
 }
 
