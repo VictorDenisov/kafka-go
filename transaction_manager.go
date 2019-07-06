@@ -37,6 +37,18 @@ func NewTransactionManager(config TransactionManagerConfig) *TransactionManager 
 }
 
 func (t *TransactionManager) initTransactions() (err error) {
+	_, err = t.getProducerID()
+	return err
+}
+
+func (t *TransactionManager) getProducerID() (pid producerID, err error) {
+	if t == nil {
+		return emptyProducerID, nil
+	}
+	if t.producerID != emptyProducerID {
+		return t.producerID, nil
+	}
+
 	var conn *Conn
 	if conn, err = t.getCoordinatorConn(); err != nil {
 		return
@@ -44,21 +56,14 @@ func (t *TransactionManager) initTransactions() (err error) {
 
 	var producerIDResponse initProducerIDResponseV0
 	if producerIDResponse, err = conn.initProducerID(t.config.TransactionalID); err != nil {
-		return
+		return emptyProducerID, err
 	}
 	if producerIDResponse.ErrorCode != 0 {
-		return Error(producerIDResponse.ErrorCode)
+		return emptyProducerID, Error(producerIDResponse.ErrorCode)
 	}
 	t.producerID.ID = producerIDResponse.ProducerID
 	t.producerID.Epoch = producerIDResponse.ProducerEpoch
-	return nil
-}
-
-func (t *TransactionManager) getProducerID() producerID {
-	if t == nil {
-		return emptyProducerID
-	}
-	return t.producerID
+	return t.producerID, nil
 }
 
 func (t *TransactionManager) beginTransaction() (err error) {

@@ -324,12 +324,18 @@ func (w *Writer) WriteMessages(ctx context.Context, msgs ...Message) error {
 			return io.ErrClosedPipe
 		}
 
+		var producerID producerID
+		producerID, err = w.transactionManager.getProducerID()
+		if err != nil {
+			log.Printf("Received error: %v", err)
+			break
+		}
 		for _, msg := range msgs {
 			select {
 			case w.msgs <- writerMessage{
 				msg:        msg,
 				res:        res,
-				producerID: w.transactionManager.getProducerID(),
+				producerID: producerID,
 			}:
 			case <-ctx.Done():
 				w.mutex.RUnlock()
