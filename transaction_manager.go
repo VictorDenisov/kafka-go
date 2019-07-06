@@ -7,22 +7,22 @@ import (
 	"time"
 )
 
-type transactionManager struct {
+type TransactionManager struct {
 	producerID    producerID
 	conn          *Conn
-	config        transactionManagerConfig
+	config        TransactionManagerConfig
 	inTransaction int32
 }
 
-type transactionManagerConfig struct {
+type TransactionManagerConfig struct {
 	transactionalID string
 	brokers         []string
 	dialer          *Dialer
 	readTimeout     time.Duration
 }
 
-func newTransactionManager(config transactionManagerConfig) *transactionManager {
-	return &transactionManager{
+func NewTransactionManager(config TransactionManagerConfig) *TransactionManager {
+	return &TransactionManager{
 		emptyProducerID,
 		nil,
 		config,
@@ -30,7 +30,7 @@ func newTransactionManager(config transactionManagerConfig) *transactionManager 
 	}
 }
 
-func (t *transactionManager) initTransactions() (err error) {
+func (t *TransactionManager) initTransactions() (err error) {
 	var conn *Conn
 	if conn, err = t.getConnectionToCoordinator(); err != nil {
 		return
@@ -48,14 +48,14 @@ func (t *transactionManager) initTransactions() (err error) {
 	return nil
 }
 
-func (t *transactionManager) getProducerID() producerID {
+func (t *TransactionManager) getProducerID() producerID {
 	if t == nil {
 		return emptyProducerID
 	}
 	return t.producerID
 }
 
-func (t *transactionManager) beginTransaction() (err error) {
+func (t *TransactionManager) beginTransaction() (err error) {
 	if len(t.config.transactionalID) == 0 {
 		return errors.New("Can't begin transaction in a non transactional writer.")
 	}
@@ -66,7 +66,7 @@ func (t *transactionManager) beginTransaction() (err error) {
 	return nil
 }
 
-func (t *transactionManager) commitTransaction() (err error) {
+func (t *TransactionManager) commitTransaction() (err error) {
 	inTransaction := atomic.LoadInt32(&t.inTransaction)
 	if inTransaction != 1 {
 		return errors.New("The transaction is not started. Nothing to commit.")
@@ -78,7 +78,7 @@ func (t *transactionManager) commitTransaction() (err error) {
 	return conn.commitTransaction(t.config.transactionalID, t.producerID)
 }
 
-func (t *transactionManager) abortTransaction() (err error) {
+func (t *TransactionManager) abortTransaction() (err error) {
 	inTransaction := atomic.LoadInt32(&t.inTransaction)
 	if inTransaction != 1 {
 		return errors.New("The transaction is not started. Nothing to commit.")
@@ -90,7 +90,7 @@ func (t *transactionManager) abortTransaction() (err error) {
 	return conn.abortTransaction(t.config.transactionalID, t.producerID)
 }
 
-func (t *transactionManager) getConnectionToCoordinator() (conn *Conn, err error) {
+func (t *TransactionManager) getConnectionToCoordinator() (conn *Conn, err error) {
 	if t.conn != nil {
 		return t.conn, nil
 	}

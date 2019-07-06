@@ -31,7 +31,7 @@ type Writer struct {
 	// Use a pointer to ensure 64-bit alignment of the values.
 	stats *writerStats
 
-	transactionManager *transactionManager
+	transactionManager *TransactionManager
 }
 
 // WriterConfig is a configuration type used to create new instances of Writer.
@@ -256,7 +256,7 @@ func NewWriter(config WriterConfig) *Writer {
 }
 
 func (w *Writer) InitTransactions() (err error) {
-	w.transactionManager = newTransactionManager(transactionManagerConfig{
+	w.transactionManager = NewTransactionManager(TransactionManagerConfig{
 		w.config.Dialer.TransactionalID,
 		w.config.Brokers,
 		w.config.Dialer,
