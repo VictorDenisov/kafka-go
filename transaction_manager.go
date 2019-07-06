@@ -129,3 +129,10 @@ func (t *TransactionManager) getCoordinatorConn() (conn *Conn, err error) {
 	t.coordinatorConn = conn
 	return conn, nil
 }
+
+func (t *TransactionManager) close() error {
+	if t != nil {
+		return t.coordinatorConn.Close()
+	}
+	return nil
+}

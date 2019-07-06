@@ -436,6 +436,7 @@ func (w *Writer) Close() (err error) {
 		w.closed = true
 		close(w.msgs)
 		close(w.done)
+		err = w.transactionManager.close()
 	}
 
 	w.mutex.Unlock()
