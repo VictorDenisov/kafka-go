@@ -8,10 +8,10 @@ import (
 )
 
 type TransactionManager struct {
-	producerID    producerID
-	conn          *Conn
-	config        TransactionManagerConfig
-	inTransaction int32
+	producerID      producerID
+	coordinatorConn *Conn
+	config          TransactionManagerConfig
+	inTransaction   int32
 }
 
 type TransactionManagerConfig struct {
@@ -38,7 +38,7 @@ func NewTransactionManager(config TransactionManagerConfig) *TransactionManager 
 
 func (t *TransactionManager) initTransactions() (err error) {
 	var conn *Conn
-	if conn, err = t.getConnectionToCoordinator(); err != nil {
+	if conn, err = t.getCoordinatorConn(); err != nil {
 		return
 	}
 
@@ -78,7 +78,7 @@ func (t *TransactionManager) commitTransaction() (err error) {
 		return errors.New("The transaction is not started. Nothing to commit.")
 	}
 	var conn *Conn
-	if conn, err = t.getConnectionToCoordinator(); err != nil {
+	if conn, err = t.getCoordinatorConn(); err != nil {
 		return
 	}
 	return conn.commitTransaction(t.config.TransactionalID, t.producerID)
@@ -90,15 +90,15 @@ func (t *TransactionManager) abortTransaction() (err error) {
 		return errors.New("The transaction is not started. Nothing to commit.")
 	}
 	var conn *Conn
-	if conn, err = t.getConnectionToCoordinator(); err != nil {
+	if conn, err = t.getCoordinatorConn(); err != nil {
 		return
 	}
 	return conn.abortTransaction(t.config.TransactionalID, t.producerID)
 }
 
-func (t *TransactionManager) getConnectionToCoordinator() (conn *Conn, err error) {
-	if t.conn != nil {
-		return t.conn, nil
+func (t *TransactionManager) getCoordinatorConn() (conn *Conn, err error) {
+	if t.coordinatorConn != nil {
+		return t.coordinatorConn, nil
 	}
 	var coordinator findCoordinatorResponseCoordinatorV0
 	if len(t.config.TransactionalID) != 0 {
@@ -126,6 +126,6 @@ func (t *TransactionManager) getConnectionToCoordinator() (conn *Conn, err error
 		return nil, err
 	}
 
-	t.conn = conn
+	t.coordinatorConn = conn
 	return conn, nil
 }
