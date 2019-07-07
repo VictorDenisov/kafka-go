@@ -321,3 +321,60 @@ func TestIdempotentWriter(t *testing.T) {
 		t.Fatalf("Wrong message is received")
 	}
 }
+
+func TestIdempotentWriterWithTwoMessages(t *testing.T) {
+	topic := CreateTopic(t, 1)
+	//topic := "my-test-topic"
+
+	w := NewWriter(WriterConfig{
+		Brokers:      []string{"localhost:9092"},
+		Topic:        topic,
+		BatchTimeout: 1000 * time.Millisecond,
+		BatchSize:    1,
+		TransactionManager: NewTransactionManager(TransactionManagerConfig{
+			Brokers: []string{"localhost:9092"},
+		}),
+	})
+	defer w.Close()
+
+	message := Message{
+		Topic: topic,
+		Key:   []byte("key1"),
+		Value: []byte("value1"),
+	}
+	err := w.WriteMessages(context.Background(), message)
+	if err != nil {
+		t.Fatalf("Error writing a message: %v", err)
+	}
+	//w.config.TransactionManager.producerID = emptyProducerID
+
+	message = Message{
+		Topic: topic,
+		Key:   []byte("key2"),
+		Value: []byte("value2"),
+	}
+	err = w.WriteMessages(context.Background(), message)
+	if err != nil {
+		t.Fatalf("Error writing a message: %v", err)
+	}
+
+	r := NewReader(ReaderConfig{
+		Brokers:   []string{"localhost:9092"},
+		Topic:     topic,
+		Partition: 0,
+	})
+	defer r.Close()
+
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	m, err := r.ReadMessage(ctx)
+	if string(m.Key) != "key1" {
+		t.Fatalf("Wrong message is received")
+	}
+	m, err = r.ReadMessage(ctx)
+	if err != nil {
+		t.Fatalf("Didn't receive second message")
+	}
+	if string(m.Key) != "key2" {
+		t.Fatalf("Wrong message is received")
+	}
+}
