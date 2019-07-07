@@ -30,8 +30,6 @@ type Writer struct {
 	// writer stats are all made of atomic values, no need for synchronization.
 	// Use a pointer to ensure 64-bit alignment of the values.
 	stats *writerStats
-
-	transactionManager *TransactionManager
 }
 
 // WriterConfig is a configuration type used to create new instances of Writer.
@@ -261,25 +259,19 @@ func NewWriter(config WriterConfig) *Writer {
 }
 
 func (w *Writer) InitTransactions() (err error) {
-	w.transactionManager = NewTransactionManager(TransactionManagerConfig{
-		w.config.Dialer.TransactionalID,
-		w.config.Brokers,
-		w.config.Dialer,
-		w.config.ReadTimeout,
-	})
-	return w.transactionManager.initTransactions()
+	return w.config.TransactionManager.initTransactions()
 }
 
 func (w *Writer) BeginTransaction() (err error) {
-	return w.transactionManager.beginTransaction()
+	return w.config.TransactionManager.beginTransaction()
 }
 
 func (w *Writer) CommitTransaction() (err error) {
-	return w.transactionManager.commitTransaction()
+	return w.config.TransactionManager.commitTransaction()
 }
 
 func (w *Writer) AbortTransaction() (err error) {
-	return w.transactionManager.abortTransaction()
+	return w.config.TransactionManager.abortTransaction()
 }
 
 // WriteMessages writes a batch of messages to the kafka topic configured on this
@@ -325,7 +317,7 @@ func (w *Writer) WriteMessages(ctx context.Context, msgs ...Message) error {
 		}
 
 		var producerID producerID
-		producerID, err = w.transactionManager.getProducerID()
+		producerID, err = w.config.TransactionManager.getProducerID()
 		if err != nil {
 			log.Printf("Received error: %v", err)
 			break
@@ -442,7 +434,7 @@ func (w *Writer) Close() (err error) {
 		w.closed = true
 		close(w.msgs)
 		close(w.done)
-		err = w.transactionManager.close()
+		err = w.config.TransactionManager.close()
 	}
 
 	w.mutex.Unlock()

@@ -37,6 +37,12 @@ func NewTransactionManager(config TransactionManagerConfig) *TransactionManager 
 }
 
 func (t *TransactionManager) initTransactions() (err error) {
+	if t == nil {
+		return errors.New("Can't initialize transactions without a configured transaction manager.")
+	}
+	if len(t.config.TransactionalID) == 0 {
+		return errors.New("Can't initialize transactions without a specified transactional id.")
+	}
 	_, err = t.getProducerID()
 	return err
 }
@@ -136,7 +142,7 @@ func (t *TransactionManager) getCoordinatorConn() (conn *Conn, err error) {
 }
 
 func (t *TransactionManager) close() error {
-	if t != nil {
+	if t != nil && t.coordinatorConn != nil {
 		return t.coordinatorConn.Close()
 	}
 	return nil

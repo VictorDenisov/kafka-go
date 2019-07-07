@@ -213,12 +213,17 @@ func readPartition(topic string, partition int, offset int64) (msgs []Message, e
 func TestWriterInitTransactions(t *testing.T) {
 	topic := CreateTopic(t, 1)
 
-	DefaultDialer.TransactionalID = "myTransaction"
+	transactionalID := "myTransaction"
+	DefaultDialer.TransactionalID = transactionalID
 	w := NewWriter(WriterConfig{
 		Brokers:      []string{"localhost:9092"},
 		Topic:        topic,
 		BatchTimeout: 100 * time.Millisecond,
 		BatchSize:    5,
+		TransactionManager: NewTransactionManager(TransactionManagerConfig{
+			Brokers:         []string{"localhost:9092"},
+			TransactionalID: transactionalID,
+		}),
 	})
 	err := w.InitTransactions()
 	if err != nil {
@@ -228,13 +233,18 @@ func TestWriterInitTransactions(t *testing.T) {
 
 func TestDanglingTransactionalWrite(t *testing.T) {
 	topic := CreateTopic(t, 1)
-	DefaultDialer.TransactionalID = "myTransaction"
+	transactionalID := "myTransaction"
+	DefaultDialer.TransactionalID = transactionalID
 
 	w := NewWriter(WriterConfig{
 		Brokers:      []string{"localhost:9092"},
 		Topic:        topic,
 		BatchTimeout: 1000 * time.Millisecond,
 		BatchSize:    5,
+		TransactionManager: NewTransactionManager(TransactionManagerConfig{
+			Brokers:         []string{"localhost:9092"},
+			TransactionalID: transactionalID,
+		}),
 	})
 	defer w.Close()
 
