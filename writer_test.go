@@ -284,7 +284,7 @@ func TestDanglingTransactionalWrite(t *testing.T) {
 	}
 }
 
-func TestIdempotentDelivery(t *testing.T) {
+func TestIdempotentWriter(t *testing.T) {
 	topic := CreateTopic(t, 1)
 
 	w := NewWriter(WriterConfig{
