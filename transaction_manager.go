@@ -12,6 +12,7 @@ type TransactionManager struct {
 	coordinatorConn *Conn
 	config          TransactionManagerConfig
 	inTransaction   int32
+	baseSeq         []int32
 }
 
 type TransactionManagerConfig struct {
@@ -33,7 +34,27 @@ func NewTransactionManager(config TransactionManagerConfig) *TransactionManager 
 		nil,
 		config,
 		0,
+		nil,
 	}
+}
+
+func (t *TransactionManager) getBaseSeq(partition int32) int32 {
+	t.maybeGrowBaseSeq(partition)
+	return t.baseSeq[partition]
+}
+
+func (t *TransactionManager) bumpBaseSequence(partition, delta int32) {
+	t.maybeGrowBaseSeq(partition)
+	t.baseSeq[partition] += delta
+}
+
+func (t *TransactionManager) maybeGrowBaseSeq(partition int32) {
+	bsLen := int32(len(t.baseSeq))
+	if partition < bsLen {
+		return
+	}
+	delta := partition - bsLen + 1
+	t.baseSeq = append(t.baseSeq, make([]int32, delta)...)
 }
 
 func (t *TransactionManager) initTransactions() (err error) {
@@ -54,6 +75,8 @@ func (t *TransactionManager) getProducerID() (pid producerID, err error) {
 	if t.producerID != emptyProducerID {
 		return t.producerID, nil
 	}
+
+	t.baseSeq = make([]int32, 0, len(t.baseSeq))
 
 	var conn *Conn
 	if conn, err = t.getCoordinatorConn(); err != nil {
