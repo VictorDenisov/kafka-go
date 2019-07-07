@@ -291,7 +291,7 @@ func TestIdempotentWriter(t *testing.T) {
 		Brokers:      []string{"localhost:9092"},
 		Topic:        topic,
 		BatchTimeout: 1000 * time.Millisecond,
-		BatchSize:    5,
+		BatchSize:    1,
 		TransactionManager: NewTransactionManager(TransactionManagerConfig{
 			Brokers: []string{"localhost:9092"},
 		}),
@@ -300,13 +300,24 @@ func TestIdempotentWriter(t *testing.T) {
 
 	message := Message{
 		Topic: topic,
-		Key:   []byte("key"),
-		Value: []byte("value"),
+		Key:   []byte("key1"),
+		Value: []byte("value1"),
 	}
 	err := w.WriteMessages(context.Background(), message)
-
-	err = w.WriteMessages(context.Background(), message)
 	if err != nil {
 		t.Fatalf("Error writing a message: %v", err)
+	}
+
+	r := NewReader(ReaderConfig{
+		Brokers:   []string{"localhost:9092"},
+		Topic:     topic,
+		Partition: 0,
+	})
+	defer r.Close()
+
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	m, err := r.ReadMessage(ctx)
+	if string(m.Key) != "key1" {
+		t.Fatalf("Wrong message is received")
 	}
 }
