@@ -283,3 +283,30 @@ func TestDanglingTransactionalWrite(t *testing.T) {
 		t.Errorf("Failed waiting for the message: %v", err)
 	}
 }
+
+func TestIdempotentDelivery(t *testing.T) {
+	topic := CreateTopic(t, 1)
+
+	w := NewWriter(WriterConfig{
+		Brokers:      []string{"localhost:9092"},
+		Topic:        topic,
+		BatchTimeout: 1000 * time.Millisecond,
+		BatchSize:    5,
+		TransactionManager: NewTransactionManager(TransactionManagerConfig{
+			Brokers: []string{"localhost:9092"},
+		}),
+	})
+	defer w.Close()
+
+	message := Message{
+		Topic: topic,
+		Key:   []byte("key"),
+		Value: []byte("value"),
+	}
+	err := w.WriteMessages(context.Background(), message)
+
+	err = w.WriteMessages(context.Background(), message)
+	if err != nil {
+		t.Fatalf("Error writing a message: %v", err)
+	}
+}

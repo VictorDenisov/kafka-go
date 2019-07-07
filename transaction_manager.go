@@ -112,31 +112,38 @@ func (t *TransactionManager) getCoordinatorConn() (conn *Conn, err error) {
 		return t.coordinatorConn, nil
 	}
 	var coordinator findCoordinatorResponseCoordinatorV0
-	if len(t.config.TransactionalID) != 0 {
-		for _, broker := range shuffledStrings(t.config.Brokers) {
-			if conn, err = t.config.Dialer.Dial("tcp", broker); err != nil {
-				continue
-			}
+	var addr string
+	for _, broker := range shuffledStrings(t.config.Brokers) {
+		if conn, err = t.config.Dialer.Dial("tcp", broker); err != nil {
+			continue
+		}
+		if err != nil {
+			continue
+		}
+		if len(t.config.TransactionalID) == 0 {
+			// Use first broker as coordinator if no transactional id is specified.
+			goto finish
+		}
 
-			conn.SetReadDeadline(time.Now().Add(t.config.ReadTimeout))
-			coordinator, err = conn.findTransactionCoordinator(t.config.TransactionalID)
-			conn.Close()
+		conn.SetReadDeadline(time.Now().Add(t.config.ReadTimeout))
+		coordinator, err = conn.findTransactionCoordinator(t.config.TransactionalID)
+		conn.Close()
 
-			if err == nil {
-				break
-			}
+		if err == nil {
+			break
 		}
 	}
 
 	if err != nil {
 		return nil, err
 	}
-	addr := fmt.Sprintf("%v:%v", coordinator.Host, coordinator.Port)
+	addr = fmt.Sprintf("%v:%v", coordinator.Host, coordinator.Port)
 	if conn, err = t.config.Dialer.Dial("tcp", addr); err != nil {
 		// failed to connect to the coordinator
 		return nil, err
 	}
 
+finish:
 	t.coordinatorConn = conn
 	return conn, nil
 }

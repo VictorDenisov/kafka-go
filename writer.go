@@ -306,6 +306,12 @@ func (w *Writer) WriteMessages(ctx context.Context, msgs ...Message) error {
 	var res = make(chan error, len(msgs))
 	var err error
 
+	var producerID producerID
+	producerID, err = w.config.TransactionManager.getProducerID()
+	if err != nil {
+		return err
+	}
+
 	t0 := time.Now()
 
 	for attempt := 0; attempt < w.config.MaxAttempts; attempt++ {
@@ -316,12 +322,6 @@ func (w *Writer) WriteMessages(ctx context.Context, msgs ...Message) error {
 			return io.ErrClosedPipe
 		}
 
-		var producerID producerID
-		producerID, err = w.config.TransactionManager.getProducerID()
-		if err != nil {
-			log.Printf("Received error: %v", err)
-			break
-		}
 		for _, msg := range msgs {
 			select {
 			case w.msgs <- writerMessage{
