@@ -1,7 +1,6 @@
 package kafka
 
 import (
-	"log"
 	"net"
 	"testing"
 
@@ -19,5 +18,8 @@ func TestApiVersions(t *testing.T) {
 		t.Fatalf("Failed receive api versions: %v", err)
 	}
 
-	log.Printf("versions: %v", versions)
+	if apiVersion(versions[fetchRequest].MinVersion) > bc.fetchVersion ||
+		apiVersion(versions[fetchRequest].MaxVersion) < bc.fetchVersion {
+		t.Fatalf("fetchVersion is outside of apiVersions interval")
+	}
 }

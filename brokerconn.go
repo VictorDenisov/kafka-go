@@ -31,6 +31,9 @@ type BrokerConn struct {
 	apiVersions map[apiKey]ApiVersion
 
 	correlationID int32
+
+	fetchVersion   apiVersion
+	produceVersion apiVersion
 }
 
 type BrokerConnConfig struct {
@@ -42,13 +45,15 @@ func NewBrokerConn(conn net.Conn, config BrokerConnConfig) *BrokerConn {
 		config.ClientID = DefaultClientID
 	}
 
-	return &BrokerConn{
+	b := &BrokerConn{
 		conn:     conn,
 		config:   config,
 		clientID: DefaultClientID,
 		rbuf:     *bufio.NewReader(conn),
 		wbuf:     *bufio.NewWriter(conn),
 	}
+	b.selectVersions()
+	return b
 }
 
 func (c *BrokerConn) ApiVersions() ([]ApiVersion, error) {
@@ -100,6 +105,38 @@ func (c *BrokerConn) ApiVersions() ([]ApiVersion, error) {
 	}
 
 	return r, nil
+}
+
+func (c *BrokerConn) selectVersions() {
+	var err error
+	apiVersions, err := c.ApiVersions()
+	if err != nil {
+		c.apiVersions = defaultApiVersions
+	} else {
+		c.apiVersions = make(map[apiKey]ApiVersion)
+		for _, v := range apiVersions {
+			c.apiVersions[apiKey(v.ApiKey)] = v
+		}
+	}
+	for _, v := range c.apiVersions {
+		if apiKey(v.ApiKey) == fetchRequest {
+			switch version := v.MaxVersion; {
+			case version >= 10:
+				c.fetchVersion = 10
+			case version >= 5:
+				c.fetchVersion = 5
+			default:
+				c.fetchVersion = 2
+			}
+		}
+		if apiKey(v.ApiKey) == produceRequest {
+			if v.MaxVersion >= 7 {
+				c.produceVersion = 7
+			} else {
+				c.produceVersion = 2
+			}
+		}
+	}
 }
 
 func (c *BrokerConn) doRequest(d *connDeadline, write func(time.Time, int32) error) (id int32, err error) {
