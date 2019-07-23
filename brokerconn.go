@@ -226,3 +226,35 @@ func (c *BrokerConn) peekResponseSizeAndID() (int32, int32, error) {
 func (c *BrokerConn) skipResponseSizeAndID() {
 	c.rbuf.Discard(8)
 }
+
+func (c *BrokerConn) readOperation(write func(time.Time, int32) error, read func(time.Time, int) error) error {
+	return c.do(&c.rdeadline, write, read)
+}
+
+func (c *BrokerConn) writeoperation(write func(time.Time, int32) error, read func(time.Time, int) error) error {
+	return c.do(&c.wdeadline, write, read)
+}
+
+func (c *BrokerConn) do(d *connDeadline, write func(time.Time, int32) error, read func(time.Time, int) error) error {
+	id, err := c.doRequest(d, write)
+	if err != nil {
+		return err
+	}
+
+	deadline, size, lock, err := c.waitResponse(d, id)
+	if err != nil {
+		return err
+	}
+
+	if err = read(deadline, size); err != nil {
+		switch err.(type) {
+		case error:
+		default:
+			c.conn.Close()
+		}
+	}
+
+	d.unsetConnReadDeadline()
+	lock.Unlock()
+	return err
+}
