@@ -73,7 +73,7 @@ func (batch *Batch) close() (err error) {
 	}
 
 	if conn != nil {
-		conn.rdeadline.unsetConnReadDeadline()
+		conn.brokerConn.rdeadline.unsetConnReadDeadline()
 		conn.mutex.Lock()
 		conn.offset = batch.offset
 		conn.mutex.Unlock()

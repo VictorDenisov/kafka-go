@@ -231,7 +231,7 @@ func (c *BrokerConn) readOperation(write func(time.Time, int32) error, read func
 	return c.do(&c.rdeadline, write, read)
 }
 
-func (c *BrokerConn) writeoperation(write func(time.Time, int32) error, read func(time.Time, int) error) error {
+func (c *BrokerConn) writeOperation(write func(time.Time, int32) error, read func(time.Time, int) error) error {
 	return c.do(&c.wdeadline, write, read)
 }
 
@@ -257,4 +257,374 @@ func (c *BrokerConn) do(d *connDeadline, write func(time.Time, int32) error, rea
 	d.unsetConnReadDeadline()
 	lock.Unlock()
 	return err
+}
+
+var defaultApiVersions map[apiKey]ApiVersion = map[apiKey]ApiVersion{
+	produceRequest:          ApiVersion{int16(produceRequest), int16(v2), int16(v2)},
+	fetchRequest:            ApiVersion{int16(fetchRequest), int16(v2), int16(v2)},
+	listOffsetRequest:       ApiVersion{int16(listOffsetRequest), int16(v1), int16(v1)},
+	metadataRequest:         ApiVersion{int16(metadataRequest), int16(v1), int16(v1)},
+	offsetCommitRequest:     ApiVersion{int16(offsetCommitRequest), int16(v2), int16(v2)},
+	offsetFetchRequest:      ApiVersion{int16(offsetFetchRequest), int16(v1), int16(v1)},
+	groupCoordinatorRequest: ApiVersion{int16(groupCoordinatorRequest), int16(v0), int16(v0)},
+	joinGroupRequest:        ApiVersion{int16(joinGroupRequest), int16(v1), int16(v1)},
+	heartbeatRequest:        ApiVersion{int16(heartbeatRequest), int16(v0), int16(v0)},
+	leaveGroupRequest:       ApiVersion{int16(leaveGroupRequest), int16(v0), int16(v0)},
+	syncGroupRequest:        ApiVersion{int16(syncGroupRequest), int16(v0), int16(v0)},
+	describeGroupsRequest:   ApiVersion{int16(describeGroupsRequest), int16(v1), int16(v1)},
+	listGroupsRequest:       ApiVersion{int16(listGroupsRequest), int16(v1), int16(v1)},
+	apiVersionsRequest:      ApiVersion{int16(apiVersionsRequest), int16(v0), int16(v0)},
+	createTopicsRequest:     ApiVersion{int16(createTopicsRequest), int16(v0), int16(v0)},
+	deleteTopicsRequest:     ApiVersion{int16(deleteTopicsRequest), int16(v1), int16(v1)},
+}
+
+// Controller requests kafka for the current controller and returns its URL
+func (c *BrokerConn) Controller() (broker Broker, err error) {
+	err = c.readOperation(
+		func(deadline time.Time, id int32) error {
+			return c.writeRequest(metadataRequest, v1, id, topicMetadataRequestV1([]string{}))
+		},
+		func(deadline time.Time, size int) error {
+			var res metadataResponseV1
+
+			if err := c.readResponse(size, &res); err != nil {
+				return err
+			}
+			for _, brokerMeta := range res.Brokers {
+				if brokerMeta.NodeID == res.ControllerID {
+					broker = Broker{ID: int(brokerMeta.NodeID),
+						Port: int(brokerMeta.Port),
+						Host: brokerMeta.Host,
+						Rack: brokerMeta.Rack}
+					break
+				}
+			}
+			return nil
+		},
+	)
+	return broker, err
+}
+
+func (c *BrokerConn) writeRequestHeader(apiKey apiKey, apiVersion apiVersion, correlationID int32, size int32) {
+	hdr := c.requestHeader(apiKey, apiVersion, correlationID)
+	hdr.Size = (hdr.size() + size) - 4
+	hdr.writeTo(&c.wbuf)
+}
+
+func (c *BrokerConn) writeRequest(apiKey apiKey, apiVersion apiVersion, correlationID int32, req request) error {
+	hdr := c.requestHeader(apiKey, apiVersion, correlationID)
+	hdr.Size = (hdr.size() + req.size()) - 4
+	hdr.writeTo(&c.wbuf)
+	req.writeTo(&c.wbuf)
+	return c.wbuf.Flush()
+}
+
+func (c *BrokerConn) readResponse(size int, res interface{}) error {
+	size, err := read(&c.rbuf, size, res)
+	switch err.(type) {
+	case Error:
+		var e error
+		if size, e = discardN(&c.rbuf, size, size); e != nil {
+			err = e
+		}
+	}
+	return expectZeroSize(size, err)
+}
+
+func (c *BrokerConn) requestHeader(apiKey apiKey, apiVersion apiVersion, correlationID int32) requestHeader {
+	return requestHeader{
+		ApiKey:        int16(apiKey),
+		ApiVersion:    int16(apiVersion),
+		CorrelationID: correlationID,
+		ClientID:      c.clientID,
+	}
+}
+
+// Brokers retrieve the broker list from the Kafka metadata
+func (c *BrokerConn) Brokers() ([]Broker, error) {
+	var brokers []Broker
+	err := c.readOperation(
+		func(deadline time.Time, id int32) error {
+			return c.writeRequest(metadataRequest, v1, id, topicMetadataRequestV1([]string{}))
+		},
+		func(deadline time.Time, size int) error {
+			var res metadataResponseV1
+
+			if err := c.readResponse(size, &res); err != nil {
+				return err
+			}
+
+			brokers = make([]Broker, len(res.Brokers))
+			for i, brokerMeta := range res.Brokers {
+				brokers[i] = Broker{
+					ID:   int(brokerMeta.NodeID),
+					Port: int(brokerMeta.Port),
+					Host: brokerMeta.Host,
+					Rack: brokerMeta.Rack,
+				}
+			}
+			return nil
+		},
+	)
+	return brokers, err
+}
+
+// describeGroups retrieves the specified groups
+//
+// See http://kafka.apache.org/protocol.html#The_Messages_DescribeGroups
+func (c *BrokerConn) describeGroups(request describeGroupsRequestV0) (describeGroupsResponseV0, error) {
+	var response describeGroupsResponseV0
+
+	err := c.readOperation(
+		func(deadline time.Time, id int32) error {
+			return c.writeRequest(describeGroupsRequest, v0, id, request)
+		},
+		func(deadline time.Time, size int) error {
+			return expectZeroSize(func() (remain int, err error) {
+				return (&response).readFrom(&c.rbuf, size)
+			}())
+		},
+	)
+	if err != nil {
+		return describeGroupsResponseV0{}, err
+	}
+	for _, group := range response.Groups {
+		if group.ErrorCode != 0 {
+			return describeGroupsResponseV0{}, Error(group.ErrorCode)
+		}
+	}
+
+	return response, nil
+}
+
+// findCoordinator finds the coordinator for the specified group or transaction
+//
+// See http://kafka.apache.org/protocol.html#The_Messages_FindCoordinator
+func (c *BrokerConn) findCoordinator(request findCoordinatorRequestV0) (findCoordinatorResponseV0, error) {
+	var response findCoordinatorResponseV0
+
+	err := c.readOperation(
+		func(deadline time.Time, id int32) error {
+			return c.writeRequest(groupCoordinatorRequest, v0, id, request)
+
+		},
+		func(deadline time.Time, size int) error {
+			return expectZeroSize(func() (remain int, err error) {
+				return (&response).readFrom(&c.rbuf, size)
+			}())
+		},
+	)
+	if err != nil {
+		return findCoordinatorResponseV0{}, err
+	}
+	if response.ErrorCode != 0 {
+		return findCoordinatorResponseV0{}, Error(response.ErrorCode)
+	}
+
+	return response, nil
+}
+
+// heartbeat sends a heartbeat message required by consumer groups
+//
+// See http://kafka.apache.org/protocol.html#The_Messages_Heartbeat
+func (c *BrokerConn) heartbeat(request heartbeatRequestV0) (heartbeatResponseV0, error) {
+	var response heartbeatResponseV0
+
+	err := c.writeOperation(
+		func(deadline time.Time, id int32) error {
+			return c.writeRequest(heartbeatRequest, v0, id, request)
+		},
+		func(deadline time.Time, size int) error {
+			return expectZeroSize(func() (remain int, err error) {
+				return (&response).readFrom(&c.rbuf, size)
+			}())
+		},
+	)
+	if err != nil {
+		return heartbeatResponseV0{}, err
+	}
+	if response.ErrorCode != 0 {
+		return heartbeatResponseV0{}, Error(response.ErrorCode)
+	}
+
+	return response, nil
+}
+
+// joinGroup attempts to join a consumer group
+//
+// See http://kafka.apache.org/protocol.html#The_Messages_JoinGroup
+func (c *BrokerConn) joinGroup(request joinGroupRequestV1) (joinGroupResponseV1, error) {
+	var response joinGroupResponseV1
+
+	err := c.writeOperation(
+		func(deadline time.Time, id int32) error {
+			return c.writeRequest(joinGroupRequest, v1, id, request)
+		},
+		func(deadline time.Time, size int) error {
+			return expectZeroSize(func() (remain int, err error) {
+				return (&response).readFrom(&c.rbuf, size)
+			}())
+		},
+	)
+	if err != nil {
+		return joinGroupResponseV1{}, err
+	}
+	if response.ErrorCode != 0 {
+		return joinGroupResponseV1{}, Error(response.ErrorCode)
+	}
+
+	return response, nil
+}
+
+// leaveGroup leaves the consumer from the consumer group
+//
+// See http://kafka.apache.org/protocol.html#The_Messages_LeaveGroup
+func (c *BrokerConn) leaveGroup(request leaveGroupRequestV0) (leaveGroupResponseV0, error) {
+	var response leaveGroupResponseV0
+
+	err := c.writeOperation(
+		func(deadline time.Time, id int32) error {
+			return c.writeRequest(leaveGroupRequest, v0, id, request)
+		},
+		func(deadline time.Time, size int) error {
+			return expectZeroSize(func() (remain int, err error) {
+				return (&response).readFrom(&c.rbuf, size)
+			}())
+		},
+	)
+	if err != nil {
+		return leaveGroupResponseV0{}, err
+	}
+	if response.ErrorCode != 0 {
+		return leaveGroupResponseV0{}, Error(response.ErrorCode)
+	}
+
+	return response, nil
+}
+
+// listGroups lists all the consumer groups
+//
+// See http://kafka.apache.org/protocol.html#The_Messages_ListGroups
+func (c *BrokerConn) listGroups(request listGroupsRequestV1) (listGroupsResponseV1, error) {
+	var response listGroupsResponseV1
+
+	err := c.readOperation(
+		func(deadline time.Time, id int32) error {
+			return c.writeRequest(listGroupsRequest, v1, id, request)
+		},
+		func(deadline time.Time, size int) error {
+			return expectZeroSize(func() (remain int, err error) {
+				return (&response).readFrom(&c.rbuf, size)
+			}())
+		},
+	)
+	if err != nil {
+		return listGroupsResponseV1{}, err
+	}
+	if response.ErrorCode != 0 {
+		return listGroupsResponseV1{}, Error(response.ErrorCode)
+	}
+
+	return response, nil
+}
+
+// offsetCommit commits the specified topic partition offsets
+//
+// See http://kafka.apache.org/protocol.html#The_Messages_OffsetCommit
+func (c *BrokerConn) offsetCommit(request offsetCommitRequestV2) (offsetCommitResponseV2, error) {
+	var response offsetCommitResponseV2
+
+	err := c.writeOperation(
+		func(deadline time.Time, id int32) error {
+			return c.writeRequest(offsetCommitRequest, v2, id, request)
+		},
+		func(deadline time.Time, size int) error {
+			return expectZeroSize(func() (remain int, err error) {
+				return (&response).readFrom(&c.rbuf, size)
+			}())
+		},
+	)
+	if err != nil {
+		return offsetCommitResponseV2{}, err
+	}
+	for _, r := range response.Responses {
+		for _, pr := range r.PartitionResponses {
+			if pr.ErrorCode != 0 {
+				return offsetCommitResponseV2{}, Error(pr.ErrorCode)
+			}
+		}
+	}
+
+	return response, nil
+}
+
+// offsetFetch fetches the offsets for the specified topic partitions.
+// -1 indicates that there is no offset saved for the partition.
+//
+// See http://kafka.apache.org/protocol.html#The_Messages_OffsetFetch
+func (c *BrokerConn) offsetFetch(request offsetFetchRequestV1) (offsetFetchResponseV1, error) {
+	var response offsetFetchResponseV1
+
+	err := c.readOperation(
+		func(deadline time.Time, id int32) error {
+			return c.writeRequest(offsetFetchRequest, v1, id, request)
+		},
+		func(deadline time.Time, size int) error {
+			return expectZeroSize(func() (remain int, err error) {
+				return (&response).readFrom(&c.rbuf, size)
+			}())
+		},
+	)
+	if err != nil {
+		return offsetFetchResponseV1{}, err
+	}
+	for _, r := range response.Responses {
+		for _, pr := range r.PartitionResponses {
+			if pr.ErrorCode != 0 {
+				return offsetFetchResponseV1{}, Error(pr.ErrorCode)
+			}
+		}
+	}
+
+	return response, nil
+}
+
+// syncGroups completes the handshake to join a consumer group
+//
+// See http://kafka.apache.org/protocol.html#The_Messages_SyncGroup
+func (c *BrokerConn) syncGroups(request syncGroupRequestV0) (syncGroupResponseV0, error) {
+	var response syncGroupResponseV0
+
+	err := c.readOperation(
+		func(deadline time.Time, id int32) error {
+			return c.writeRequest(syncGroupRequest, v0, id, request)
+		},
+		func(deadline time.Time, size int) error {
+			return expectZeroSize(func() (remain int, err error) {
+				return (&response).readFrom(&c.rbuf, size)
+			}())
+		},
+	)
+	if err != nil {
+		return syncGroupResponseV0{}, err
+	}
+	if response.ErrorCode != 0 {
+		return syncGroupResponseV0{}, Error(response.ErrorCode)
+	}
+
+	return response, nil
+}
+
+func (c *BrokerConn) Close() error {
+	return c.conn.Close()
+}
+
+// LocalAddr returns the local network address.
+func (c *BrokerConn) LocalAddr() net.Addr {
+	return c.conn.LocalAddr()
+}
+
+// RemoteAddr returns the remote network address.
+func (c *BrokerConn) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
 }
