@@ -15,7 +15,7 @@ import (
 func TestDialer(t *testing.T) {
 	tests := []struct {
 		scenario string
-		function func(*testing.T, context.Context, *Dialer)
+		function func(*testing.T, context.Context, Dialer)
 	}{
 		{
 			scenario: "looking up partitions returns the list of available partitions for a topic",
@@ -31,12 +31,12 @@ func TestDialer(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			testFunc(t, ctx, &Dialer{})
+			testFunc(t, ctx, &SingleDialer{})
 		})
 	}
 }
 
-func testDialerLookupPartitions(t *testing.T, ctx context.Context, d *Dialer) {
+func testDialerLookupPartitions(t *testing.T, ctx context.Context, d Dialer) {
 	const topic = "test-dialer-LookupPartitions"
 
 	createTopic(t, topic, 1)
@@ -216,7 +216,7 @@ func TestDialerTLS(t *testing.T) {
 	}()
 
 	// Use the tls.Config and connect to the SSL proxy
-	d := &Dialer{
+	d := &SingleDialer{
 		TLS: config,
 	}
 	partitions, err := d.LookupPartitions(context.Background(), "tcp", l.Addr().String(), topic)
@@ -285,7 +285,7 @@ func (m *MockConn) ReadPartitions(topics ...string) (partitions []Partition, err
 
 func TestDialerConnectTLSHonorsContext(t *testing.T) {
 	config := tlsConfig(t)
-	d := &Dialer{
+	d := &SingleDialer{
 		TLS: config,
 	}
 

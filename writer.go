@@ -51,7 +51,7 @@ type WriterConfig struct {
 	// cluster.
 	//
 	// If nil, the default dialer is used instead.
-	Dialer *Dialer
+	Dialer Dialer
 
 	// The balancer used to distribute messages across partitions.
 	//
@@ -412,7 +412,7 @@ func (w *Writer) Stats() WriterStats {
 		Async:             w.config.Async,
 		QueueLength:       int64(len(w.msgs)),
 		QueueCapacity:     int64(cap(w.msgs)),
-		ClientID:          w.config.Dialer.ClientID,
+		ClientID:          w.config.Dialer.GetClientID(),
 		Topic:             w.config.Topic,
 	}
 }
@@ -556,7 +556,7 @@ type writer struct {
 	maxMessageBytes int
 	batchTimeout    time.Duration
 	writeTimeout    time.Duration
-	dialer          *Dialer
+	dialer          Dialer
 	msgs            chan writerMessage
 	join            sync.WaitGroup
 	stats           *writerStats

@@ -12,10 +12,21 @@ import (
 	"github.com/segmentio/kafka-go/sasl"
 )
 
-// The Dialer type mirrors the net.Dialer API but is designed to open kafka
+type Dialer interface {
+	Dial(network string, address string) (*Conn, error)
+	DialContext(ctx context.Context, network string, address string) (*Conn, error)
+	DialLeader(ctx context.Context, network string, address string, topic string, partition int) (*Conn, error)
+	DialPartition(ctx context.Context, network string, address string, partition Partition) (*Conn, error)
+	LookupLeader(ctx context.Context, network string, address string, topic string, partition int) (Broker, error)
+	LookupPartition(ctx context.Context, network string, address string, topic string, partition int) (Partition, error)
+	LookupPartitions(ctx context.Context, network string, address string, topic string) ([]Partition, error)
+	GetClientID() string
+}
+
+// The SingleDialer type mirrors the net.SingleDialer API but is designed to open kafka
 // connections instead of raw network connections.
-type Dialer struct {
-	// Unique identifier for client connections established by this Dialer.
+type SingleDialer struct {
+	// Unique identifier for client connections established by this SingleDialer.
 	ClientID string
 
 	// Timeout is the maximum amount of time a dial will wait for a connect to
@@ -61,11 +72,11 @@ type Dialer struct {
 	// Resolver optionally specifies an alternate resolver to use.
 	Resolver Resolver
 
-	// TLS enables Dialer to open secure connections.  If nil, standard net.Conn
+	// TLS enables SingleDialer to open secure connections.  If nil, standard net.Conn
 	// will be used.
 	TLS *tls.Config
 
-	// SASLMechanism configures the Dialer to use SASL authentication.  If nil,
+	// SASLMechanism configures the SingleDialer to use SASL authentication.  If nil,
 	// no authentication will be performed.
 	SASLMechanism sasl.Mechanism
 
@@ -77,7 +88,7 @@ type Dialer struct {
 }
 
 // Dial connects to the address on the named network.
-func (d *Dialer) Dial(network string, address string) (*Conn, error) {
+func (d *SingleDialer) Dial(network string, address string) (*Conn, error) {
 	return d.DialContext(context.Background(), network, address)
 }
 
@@ -94,7 +105,7 @@ func (d *Dialer) Dial(network string, address string) (*Conn, error) {
 // time to connect. For example, if a host has 4 IP addresses and the timeout is
 // 1 minute, the connect to each single address will be given 15 seconds to
 // complete before trying the next one.
-func (d *Dialer) DialContext(ctx context.Context, network string, address string) (*Conn, error) {
+func (d *SingleDialer) DialContext(ctx context.Context, network string, address string) (*Conn, error) {
 	if d.Timeout != 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, d.Timeout)
@@ -126,7 +137,7 @@ func (d *Dialer) DialContext(ctx context.Context, network string, address string
 // the partition leader for the topic and return a connection to that server.
 // The original address is only used as a mechanism to discover the
 // configuration of the kafka cluster that we're connecting to.
-func (d *Dialer) DialLeader(ctx context.Context, network string, address string, topic string, partition int) (*Conn, error) {
+func (d *SingleDialer) DialLeader(ctx context.Context, network string, address string, topic string, partition int) (*Conn, error) {
 	p, err := d.LookupPartition(ctx, network, address, topic, partition)
 	if err != nil {
 		return nil, err
@@ -137,7 +148,7 @@ func (d *Dialer) DialLeader(ctx context.Context, network string, address string,
 // DialPartition opens a connection to the leader of the partition specified by partition
 // descriptor. It's strongly advised to use descriptor of the partition that comes out of
 // functions LookupPartition or LookupPartitions.
-func (d *Dialer) DialPartition(ctx context.Context, network string, address string, partition Partition) (*Conn, error) {
+func (d *SingleDialer) DialPartition(ctx context.Context, network string, address string, partition Partition) (*Conn, error) {
 	return d.connect(ctx, network, net.JoinHostPort(partition.Leader.Host, strconv.Itoa(partition.Leader.Port)), ConnConfig{
 		ClientID:        d.ClientID,
 		Topic:           partition.Topic,
@@ -148,13 +159,13 @@ func (d *Dialer) DialPartition(ctx context.Context, network string, address stri
 
 // LookupLeader searches for the kafka broker that is the leader of the
 // partition for a given topic, returning a Broker value representing it.
-func (d *Dialer) LookupLeader(ctx context.Context, network string, address string, topic string, partition int) (Broker, error) {
+func (d *SingleDialer) LookupLeader(ctx context.Context, network string, address string, topic string, partition int) (Broker, error) {
 	p, err := d.LookupPartition(ctx, network, address, topic, partition)
 	return p.Leader, err
 }
 
 // LookupPartition searches for the description of specified partition id.
-func (d *Dialer) LookupPartition(ctx context.Context, network string, address string, topic string, partition int) (Partition, error) {
+func (d *SingleDialer) LookupPartition(ctx context.Context, network string, address string, topic string, partition int) (Partition, error) {
 	c, err := d.DialContext(ctx, network, address)
 	if err != nil {
 		return Partition{}, err
@@ -204,7 +215,7 @@ func (d *Dialer) LookupPartition(ctx context.Context, network string, address st
 }
 
 // LookupPartitions returns the list of partitions that exist for the given topic.
-func (d *Dialer) LookupPartitions(ctx context.Context, network string, address string, topic string) ([]Partition, error) {
+func (d *SingleDialer) LookupPartitions(ctx context.Context, network string, address string, topic string) ([]Partition, error) {
 	conn, err := d.DialContext(ctx, network, address)
 	if err != nil {
 		return nil, err
@@ -232,8 +243,12 @@ func (d *Dialer) LookupPartitions(ctx context.Context, network string, address s
 	return prt, err
 }
 
+func (d *SingleDialer) GetClientID() string {
+	return d.ClientID
+}
+
 // connectTLS returns a tls.Conn that has already completed the Handshake
-func (d *Dialer) connectTLS(ctx context.Context, conn net.Conn, config *tls.Config) (tlsConn *tls.Conn, err error) {
+func (d *SingleDialer) connectTLS(ctx context.Context, conn net.Conn, config *tls.Config) (tlsConn *tls.Conn, err error) {
 	tlsConn = tls.Client(conn, config)
 	errch := make(chan error)
 
@@ -257,7 +272,7 @@ func (d *Dialer) connectTLS(ctx context.Context, conn net.Conn, config *tls.Conf
 
 // connect opens a socket connection to the broker, wraps it to create a
 // kafka connection, and performs SASL authentication if configured to do so.
-func (d *Dialer) connect(ctx context.Context, network, address string, connCfg ConnConfig) (*Conn, error) {
+func (d *SingleDialer) connect(ctx context.Context, network, address string, connCfg ConnConfig) (*Conn, error) {
 
 	c, err := d.dialContext(ctx, network, address)
 	if err != nil {
@@ -282,7 +297,7 @@ func (d *Dialer) connect(ctx context.Context, network, address string, connCfg C
 //
 // In case of error, this function *does not* close the connection.  That is the
 // responsibility of the caller.
-func (d *Dialer) authenticateSASL(ctx context.Context, conn *Conn) error {
+func (d *SingleDialer) authenticateSASL(ctx context.Context, conn *Conn) error {
 	mech, state, err := d.SASLMechanism.Start(ctx)
 	if err != nil {
 		return err
@@ -315,7 +330,7 @@ func (d *Dialer) authenticateSASL(ctx context.Context, conn *Conn) error {
 	return nil
 }
 
-func (d *Dialer) dialContext(ctx context.Context, network string, address string) (net.Conn, error) {
+func (d *SingleDialer) dialContext(ctx context.Context, network string, address string) (net.Conn, error) {
 	if r := d.Resolver; r != nil {
 		host, port := splitHostPort(address)
 		addrs, err := r.LookupHost(ctx, host)
@@ -362,7 +377,7 @@ func (d *Dialer) dialContext(ctx context.Context, network string, address string
 }
 
 // DefaultDialer is the default dialer used when none is specified.
-var DefaultDialer = &Dialer{
+var DefaultDialer Dialer = &SingleDialer{
 	Timeout:   10 * time.Second,
 	DualStack: true,
 }

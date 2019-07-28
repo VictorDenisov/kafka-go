@@ -11,7 +11,7 @@ import (
 func TestBatchDontExpectEOF(t *testing.T) {
 	topic := makeTopic()
 
-	broker, err := (&Dialer{
+	broker, err := (&SingleDialer{
 		Resolver: &net.Resolver{},
 	}).LookupLeader(context.Background(), "tcp", "localhost:9092", topic, 0)
 	if err != nil {

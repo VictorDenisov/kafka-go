@@ -13,7 +13,7 @@ import (
 // between MINOR and PATCH releases.
 type Client struct {
 	brokers []string
-	dialer  *Dialer
+	dialer  Dialer
 }
 
 // Configuration for Client
@@ -25,7 +25,7 @@ type ClientConfig struct {
 	// to use for bootstrap connecting to cluster
 	Brokers []string
 	// Dialer used for connecting to the Cluster
-	Dialer *Dialer
+	Dialer Dialer
 }
 
 // A ConsumerGroup and Topic as these are both strings

@@ -278,7 +278,7 @@ func TestConn(t *testing.T) {
 
 			topic := makeTopic()
 
-			conn, err := (&Dialer{
+			conn, err := (&SingleDialer{
 				Resolver: &net.Resolver{},
 			}).DialLeader(ctx, tcp, kafka, topic, 0)
 			if err != nil {
@@ -299,7 +299,7 @@ func TestConn(t *testing.T) {
 			var t2Reader *Conn
 			var t1Writer *Conn
 			var t2Writer *Conn
-			var dialer = &Dialer{}
+			var dialer = &SingleDialer{}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -1027,7 +1027,7 @@ func TestUnsupportedSASLMechanism(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	conn, err := (&Dialer{
+	conn, err := (&SingleDialer{
 		Resolver: &net.Resolver{},
 	}).DialContext(ctx, "tcp", "127.0.0.1:9093")
 	if err != nil {

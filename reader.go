@@ -922,7 +922,7 @@ type ReaderConfig struct {
 
 	// An dialer used to open connections to the kafka server. This field is
 	// optional, if nil, the default dialer is used instead.
-	Dialer *Dialer
+	Dialer Dialer
 
 	// The capacity of the internal message queue, defaults to 100 if none is
 	// set.
@@ -1624,7 +1624,7 @@ func (r *Reader) Stats() ReaderStats {
 		MaxWait:       r.config.MaxWait,
 		QueueLength:   int64(len(r.msgs)),
 		QueueCapacity: int64(cap(r.msgs)),
-		ClientID:      r.config.Dialer.ClientID,
+		ClientID:      r.config.Dialer.GetClientID(),
 		Topic:         r.config.Topic,
 		Partition:     r.stats.partition,
 	}
@@ -1726,7 +1726,7 @@ func (r *Reader) start(offsetsByPartition map[int]int64) {
 // used as an way to asynchronously fetch messages while the main program reads
 // them using the high level reader API.
 type reader struct {
-	dialer          *Dialer
+	dialer          Dialer
 	logger          *log.Logger
 	errorLogger     *log.Logger
 	brokers         []string
