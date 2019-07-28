@@ -166,6 +166,10 @@ func (d *SingleDialer) LookupLeader(ctx context.Context, network string, address
 
 // LookupPartition searches for the description of specified partition id.
 func (d *SingleDialer) LookupPartition(ctx context.Context, network string, address string, topic string, partition int) (Partition, error) {
+	return LookupPartitionWithDialer(ctx, d, network, address, topic, partition)
+}
+
+func LookupPartitionWithDialer(ctx context.Context, d Dialer, network string, address string, topic string, partition int) (Partition, error) {
 	c, err := d.DialContext(ctx, network, address)
 	if err != nil {
 		return Partition{}, err
