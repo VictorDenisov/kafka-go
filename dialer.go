@@ -138,12 +138,15 @@ func (d *SingleDialer) DialContext(ctx context.Context, network string, address 
 // The original address is only used as a mechanism to discover the
 // configuration of the kafka cluster that we're connecting to.
 func (d *SingleDialer) DialLeader(ctx context.Context, network string, address string, topic string, partition int) (*Conn, error) {
+
+func DialLeader(ctx context.Context, d Dialer, network string, address string, topic string, partition int) (*Conn, error) {
 	p, err := d.LookupPartition(ctx, network, address, topic, partition)
 	if err != nil {
 		return nil, err
 	}
 	return d.DialPartition(ctx, network, address, p)
 }
+
 
 // DialPartition opens a connection to the leader of the partition specified by partition
 // descriptor. It's strongly advised to use descriptor of the partition that comes out of
