@@ -74,6 +74,24 @@ type Dialer struct {
 	// For more details look at transactional.id description here: http://kafka.apache.org/documentation.html#producerconfigs
 	// Empty string means that the connection will be non-transactional.
 	TransactionalID string
+
+	Pool Pool
+}
+
+type Pool map[string]net.Conn
+
+func (p Pool) GetConn(key string) (net.Conn, bool) {
+	if p == nil {
+		return nil, false
+	}
+	return p[key], true
+}
+
+func (p Pool) PutConn(key string, conn net.Conn) {
+	if p == nil {
+		return
+	}
+	p[key] = conn
 }
 
 // Dial connects to the address on the named network.
@@ -330,6 +348,10 @@ func (d *Dialer) dialContext(ctx context.Context, network string, address string
 		}
 	}
 
+	if c, ok := d.Pool.GetConn(network + address); ok {
+		return c, nil
+	}
+
 	conn, err := (&net.Dialer{
 		LocalAddr:     d.LocalAddr,
 		DualStack:     d.DualStack,
@@ -354,8 +376,13 @@ func (d *Dialer) dialContext(ctx context.Context, network string, address string
 			hostname := address[:colonPos]
 			c.ServerName = hostname
 		}
-		return d.connectTLS(ctx, conn, c)
+		conn, err = d.connectTLS(ctx, conn, c)
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	d.Pool.PutConn(network+address, conn)
 
 	return conn, nil
 }
