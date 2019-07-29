@@ -94,6 +94,17 @@ func (p Pool) PutConn(key string, conn net.Conn) {
 	p[key] = conn
 }
 
+func (p Pool) Wrap(key string, conn net.Conn) net.Conn {
+	if p == nil {
+		return conn
+	}
+	return &connWrapper{
+		pool:    p,
+		key:     key,
+		wrappee: conn,
+	}
+}
+
 // Dial connects to the address on the named network.
 func (d *Dialer) Dial(network string, address string) (*Conn, error) {
 	return d.DialContext(context.Background(), network, address)
@@ -382,9 +393,50 @@ func (d *Dialer) dialContext(ctx context.Context, network string, address string
 		}
 	}
 
+	conn = d.Pool.Wrap(network+address, conn)
+
 	d.Pool.PutConn(network+address, conn)
 
 	return conn, nil
+}
+
+type connWrapper struct {
+	pool    Pool
+	key     string
+	wrappee net.Conn
+}
+
+func (w *connWrapper) Read(b []byte) (n int, err error) {
+	return w.wrappee.Read(b)
+}
+
+func (w *connWrapper) Write(b []byte) (n int, err error) {
+	return w.wrappee.Write(b)
+}
+
+func (w *connWrapper) Close() error {
+	delete(w.pool, w.key)
+	return w.wrappee.Close()
+}
+
+func (w *connWrapper) LocalAddr() net.Addr {
+	return w.wrappee.LocalAddr()
+}
+
+func (w *connWrapper) RemoteAddr() net.Addr {
+	return w.wrappee.RemoteAddr()
+}
+
+func (w *connWrapper) SetDeadline(t time.Time) error {
+	return w.wrappee.SetDeadline(t)
+}
+
+func (w *connWrapper) SetReadDeadline(t time.Time) error {
+	return w.wrappee.SetReadDeadline(t)
+}
+
+func (w *connWrapper) SetWriteDeadline(t time.Time) error {
+	return w.wrappee.SetWriteDeadline(t)
 }
 
 // DefaultDialer is the default dialer used when none is specified.
