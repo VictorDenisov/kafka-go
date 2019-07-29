@@ -7,6 +7,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/segmentio/kafka-go/sasl"
@@ -75,26 +76,48 @@ type Dialer struct {
 	// Empty string means that the connection will be non-transactional.
 	TransactionalID string
 
-	Pool Pool
+	Pool *Pool
 }
 
-type Pool map[string]net.Conn
+type Pool struct {
+	pool  map[string]net.Conn
+	mutex sync.RWMutex
+}
 
-func (p Pool) GetConn(key string) (net.Conn, bool) {
+func NewPool() *Pool {
+	return &Pool{
+		pool: make(map[string]net.Conn),
+	}
+}
+
+func (p *Pool) Get(key string) (net.Conn, bool) {
 	if p == nil {
 		return nil, false
 	}
-	return p[key], true
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	return p.pool[key], true
 }
 
-func (p Pool) PutConn(key string, conn net.Conn) {
+func (p *Pool) Put(key string, conn net.Conn) {
 	if p == nil {
 		return
 	}
-	p[key] = conn
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.pool[key] = conn
 }
 
-func (p Pool) Wrap(key string, conn net.Conn) net.Conn {
+func (p *Pool) Remove(key string) {
+	if p == nil {
+		return
+	}
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	delete(p.pool, key)
+}
+
+func (p *Pool) Wrap(key string, conn net.Conn) net.Conn {
 	if p == nil {
 		return conn
 	}
@@ -359,7 +382,7 @@ func (d *Dialer) dialContext(ctx context.Context, network string, address string
 		}
 	}
 
-	if c, ok := d.Pool.GetConn(network + address); ok {
+	if c, ok := d.Pool.Get(network + address); ok {
 		return c, nil
 	}
 
@@ -395,13 +418,13 @@ func (d *Dialer) dialContext(ctx context.Context, network string, address string
 
 	conn = d.Pool.Wrap(network+address, conn)
 
-	d.Pool.PutConn(network+address, conn)
+	d.Pool.Put(network+address, conn)
 
 	return conn, nil
 }
 
 type connWrapper struct {
-	pool    Pool
+	pool    *Pool
 	key     string
 	wrappee net.Conn
 }
@@ -415,7 +438,7 @@ func (w *connWrapper) Write(b []byte) (n int, err error) {
 }
 
 func (w *connWrapper) Close() error {
-	delete(w.pool, w.key)
+	w.pool.Remove(w.key)
 	return w.wrappee.Close()
 }
 
